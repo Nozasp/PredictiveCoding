@@ -7,7 +7,7 @@ import matplotlib.patches as mpatches #used to write custom legends
 x0 = []
 r0 = []
 y0 = []
-
+#variables
 v = {'he':  x0, 'hi':  x0, 'hs':  x0, 'hm': y0, 'dhm': y0,
      'rei': r0, 'res': r0, 'rii': r0, 'Sa':  x0, 'Sg':  x0, 'Sn': x0,
      'Sm': x0}
