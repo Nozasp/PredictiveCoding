@@ -1,3 +1,5 @@
+
+
 function [u, In, Iq, timeSpace, f] = schnell(stim, pars)
 
     if nargin < 2, pars = loadParameters(); end

@@ -40,9 +40,9 @@ function pars = loadParameters()
     pars.sigmaIn  = 3;
     pars.sigmaEI  = pars.sigmaIn;   
     pars.sigmaQie = pars.sigmaIn;
-    pars.sigmaInh = [0.2,pars.sigmaIn];
+    pars.sigmaInh = [0.2, pars.sigmaIn];
     pars.wei  = gaussianFilter(pars.sigmaEI, pars.N);
-    pars.wes  = eye(pars.N);
+    pars.wes  = eye(pars.N);  # eye = identiy matrix of size N*N
     pars.wie  = dogFilter(pars.sigmaInh(1), pars.sigmaInh(2), pars.N);
     pars.wii  = dogFilter(pars.sigmaInh(1), pars.sigmaInh(2), pars.N);
     %pars.wii  = 1-.5*gaussianFilter(1.5, pars.N);
@@ -60,10 +60,12 @@ function pars = loadParameters()
 
     % population parameters
     pars.gamma = 0.641;  % NMDA coupling   [Brunel 2001]
-    pars.sigma = 0.0007; % noise amplitude [Wong 2006]
+
+    pars.sigma = 0.0007; % noise amplitude [Wong 2006]   % it s 0.007 (nA) instead !!!
     pars.I0e   = 0.2346; % constant population input, exc (nA) [Wong2006]
     pars.I0i   = 0.17;   % constant population input, inh (nA)
-    pars.ae    = 18.26;  
+
+    pars.ae    = 18.26;
     pars.be    = -5.38;  
     pars.hme   = 78.67;   
     pars.ai    = 21.97;    
@@ -74,7 +76,6 @@ end
 
 
 function gaussW = gaussianFilter(s, N)
-
     k = 1:N;  
     n = 1 / (sqrt(2 * pi) * N * s);
     gaussW = n * exp(-(k-k').^2/(2 * s^2));
