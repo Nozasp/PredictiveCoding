@@ -7,7 +7,7 @@ from torchvision import transforms, utils, datasets
 from torch.utils.data import Dataset, DataLoader, random_split, SubsetRandomSampler, WeightedRandomSampler
 from torch.utils.data import TensorDataset, DataLoader  # for batch and split Xtrain Ytrain dataset
 import sys
-import torchviz
+
 import scipy
 import scipy.ndimage as nd
 from scipy.stats import norm
@@ -24,7 +24,7 @@ from scipy.interpolate import griddata
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-import math
+
 # from scipy.sparse import identity
 from icecream import ic  # for debugging. print variable name
 
@@ -97,8 +97,7 @@ def HeatMap(rE, rI, J=None):
 
     rE_df = pd.DataFrame(rE.T)  # to get time vs pop
     rI_df = pd.DataFrame(rI.T)
-    rE_df.index = rE_df.index + 1
-    rI_df.index = rI_df.index + 1
+
     rE_df.index.name, rI_df.index.name = ["Excitatory Population", "Inhibitory Population"]
     rE_df.columns.name, rI_df.columns.name = ["Time s", "Time s"]
     # print(rE_df.loc[[10]])
@@ -180,15 +179,12 @@ def Dirac(A, N=pars["NumN"]):
 
 
 def make_it_proba(r_e):
-    """sum_r_e = torch.sum(r_e, 1).reshape(r_e.shape[0], 1)
+    sum_r_e = torch.sum(r_e, 1).reshape(r_e.shape[0], 1)
     prob_r = torch.div(r_e, sum_r_e)  
     print(prob_r.grad_fn)
-    prob_r[prob_r != prob_r] = 0.05"""  # to replace nan to 1/20 - to sum to 1
+    prob_r[prob_r != prob_r] = 0.05  # to replace nan to 1/20 - to sum to 1
     # print("should sum to 1:", torch.sum(prob_r, 1)) #to check that it worked
-    baseline = 1
-    sum_r_e_and_baseline = torch.sum(r_e, 1).reshape(r_e.shape[0], 1) + baseline
-    prob_r = torch.div(r_e + baseline, sum_r_e_and_baseline)  
-    
+
     return prob_r.reshape(r_e.shape[0], r_e.shape[1])  # log or not log?
 
 
@@ -408,6 +404,8 @@ class Stim:
 
 
 
+
+
 class MyModel_time(nn.Module):
     def __init__(self): 
         super(MyModel_time, self).__init__()
@@ -423,9 +421,6 @@ class MyModel_time(nn.Module):
         self.ai = torch.tensor(21.97)
         self.bi = torch.tensor(-4.81)
         self.hmi = torch.tensor(125.62)
-        #create the smallest possible number
-        self.epsilon = sys.float_info.epsilon
-        
         self.sIn = torch.tensor(.1)
         self.sOut= 3.
         self.sEI = .2
@@ -433,31 +428,29 @@ class MyModel_time(nn.Module):
         self.tauGABA = torch.tensor(0.005)
         
         self.wei = torch.tensor(dog_filter(self.sOut, int(self.N)), dtype=torch.float32)   
-        self.wii = torch.tensor(np.eye(int(self.N)), dtype=torch.float32) # dog_filter(sIn, sOut, N)#np.eye(N) #
+        self.wii = torch.tensor(np.eye(int(self.N)), dtype=torch.float32) #.astype(torch.float32))  # dog_filter(sIn, sOut, N)#np.eye(N) #
         self.wie = torch.tensor(gaussian_filter(self.sEI, int(self.N)), dtype=torch.float32) #.astype(torch.float32))  # dog_filter(sIn, sOut, N)
-        self.wes = torch.tensor(np.eye(int(self.N)), dtype=torch.float32)  # Identity matrix
+        self.wes = torch.tensor(np.eye(int(self.N)), dtype=torch.float32)  #.astype(torch.float32))  # Identity matrix
+
 
         self.Jee = nn.Parameter(torch.tensor(0.072, requires_grad= True, dtype= torch.float64))#, requires_grad=False, dtype=torch.float32)#I replaced .072 by 0.072
         #ic(self.Jee.grad_fn) #should be none
-        self.Jei = nn.Parameter(torch.tensor(0.004, requires_grad= True, dtype= torch.float64)) 
-        self.Jie = nn.Parameter(torch.tensor(0.05, requires_grad=True, dtype=torch.float64))
-        self.Jii = nn.Parameter(torch.tensor(0.6, requires_grad=True, dtype=torch.float64))
+        self.Jei =nn.Parameter(torch.tensor(0.004, requires_grad= True, dtype= torch.float64)) 
+        self.Jie = nn.Parameter(torch.tensor(0.05, requires_grad=False, dtype=torch.float64))
+        self.Jii = nn.Parameter(torch.tensor(0.6, requires_grad=False, dtype=torch.float64))
         self.Jin = nn.Parameter(torch.tensor(0.00695, requires_grad= True, dtype=torch.float64))
-    
+        #self.newfactor = nn.Parameter(torch.tensor(10000., requires_grad= True, dtype=torch.float64)) #I have to scale this mock model with this new factor
+        #create the smallest possible number
+        self.epsilon = sys.float_info.epsilon
     def phi(self, I_tot, a, b, hm): #)))  # this use a lot of memory - exponential part
-        #multi= torch.nan_to_num((torch.mul(a, I_tot) + b), nan = self.epsilon, posinf=140, neginf=self.epsilon)
+        """neg_mulA_I = torch.neg(torch.multiply(a, I_tot))
+        exp_b = torch.exp(torch.add(neg_mulA_I, b))
+        divide_and_one = torch.divide(1, torch.add(exp_b, 1))
+        mul_hm = torch.mul(hm, divide_and_one) #mul_hm"""
         
-        for i in range(I_tot.shape[0]):
-                if torch.isnan(I_tot[i])== True:
-                    ic(I_tot, i)
-                    exit()
-
-        mulan =torch.mul(a, I_tot)
-        
-        multi= mulan + b
-        
-        expo = torch.exp(- (multi))  #.abs()+ self.epsilon)
-        return torch.multiply(hm, torch.divide(1, (1+ expo)))  
+        expo = torch.nan_to_num(torch.exp(- (torch.multiply(a, I_tot) + b).abs()+ self.epsilon), nan = .5, posinf=.5, neginf=.5)
+        #ic(expo.grad_fn)
+        return torch.multiply(hm, torch.divide(1, (1+ expo)))  #torch.multiply(hm, torch.divide(torch.ones(1), (torch.add(torch.ones(1), torch.exp(torch.add(torch.neg(torch.multiply(a, I_tot)), b)))
 
     def forward(self, In):
         #--- Initialize model variables here
@@ -466,23 +459,25 @@ class MyModel_time(nn.Module):
         prev_s_ampa = torch.zeros((In.shape[0], self.N)) 
         prev_s_gaba = torch.zeros((In.shape[0], self.N)) 
         s_ampa = torch.tensor(0.)
-        i_tot_e = torch.tensor(0.)
-        i_tot_i = torch.tensor(0.)
-
         for k in range(1, In.shape[0]):
             #--- Compute values of interest
             #the operation Jee_re = self.Jee * prev_r_e => triggers inplace error
             s_gaba_wie = prev_s_gaba[k-1,:] @ self.wie
             s_ampa_wei = prev_s_ampa[k-1,:] @ self.wei
             s_gaba_wii = prev_s_gaba[k-1,:] @ self.wii
+            # ic(Sampa_Jee.grad_fn)
             JeeAmpa =  torch.mul(self.Jee, s_ampa)
             i_tot_e = torch.add(torch.subtract(JeeAmpa, torch.mul(self.Jie, s_gaba_wie)), torch.mul(self.Jin, In[k - 1, :]))
             i_tot_i = torch.subtract(torch.mul(self.Jei, s_ampa_wei), torch.mul(self.Jii, s_gaba_wii))
-       
+            #ic(i_tot_e.grad_fn)
+        
             phi_arr_e = self.phi(i_tot_e, self.ae, self.be, self.hme)
+            
+            #ic(phi_arr_e.grad_fn)
+        
             phi_arr_i = self.phi(i_tot_i, self.ai, self.bi, self.hmi)
 
-            dr_e_dt = (-prev_r_e[k - 1, :] + phi_arr_e) / self.taue
+            dr_e_dt = (-prev_r_e[k - 1, :] + phi_arr_e) / self.taue#Jee*r remove pi and S
             dr_i_dt = (-prev_r_i[k - 1, :] + phi_arr_i) / self.taui
 
             r_e = prev_r_e[k - 1, :] + dr_e_dt * self.dt
@@ -498,6 +493,18 @@ class MyModel_time(nn.Module):
             prev_r_i[k,:] = r_i
             prev_s_ampa[k,:] = s_ampa
             prev_s_gaba[k,:] = s_gaba
+            
+            """ s_gaba_wie = prev_s_gaba[k-1,:] @ self.wie  # replaced torch.matmul() by @
+            s_ampa_wei = prev_s_ampa[k-1,:] @ self.wei  # @ is an inplace operation!
+            s_gaba_wii = prev_s_gaba[k-1,:] @ self.wii 
+
+            i_tot_e = torch.add(torch.subtract(torch.mul(prev_s_ampa[k-1,:], self.Jee), torch.mul(s_gaba_wie, self.Jie)), torch.mul(In[k-1,:], self.Jin))
+            #ic(i_tot_e.grad_fn)
+            i_tot_i = torch.subtract(torch.mul(s_ampa_wei,self.Jei), torch.mul(s_gaba_wii,self.Jii))
+
+            phi_arr_e = self.phi(i_tot_e, self.ae, self.be, self.hme)
+            phi_arr_i = self.phi(i_tot_i, self.ai, self.bi, self.hmi)
+            #ic(phi_arr_e.grad_fn)
             
 
             dr_e_dt = torch.div(torch.add(torch.neg(prev_r_e[k-1,:]), phi_arr_e), self.taue)
@@ -515,8 +522,10 @@ class MyModel_time(nn.Module):
             dS_gab_dt = torch.add(torch.divide(- prev_s_gaba[k-1,:], self.tauGABA), r_i)
             s_gaba = torch.mul(torch.add(prev_s_gaba[k-1,:], dS_gab_dt), self.dt)
             
+            """
+            #ic(dS_gab_dt.grad_fn, s_gaba.grad_fn)
             
-        return prev_r_e, prev_r_i
+        return (prev_r_e), (prev_r_i) #softmax
     
 
 
@@ -552,10 +561,10 @@ sti = torch.tensor(stimuli.In, dtype=torch.float32)
 r_e, r_i = mymodel.forward(sti)
 print(torch.max(r_e[1000,:]))
 HeatMap(r_e.detach().numpy(), r_i.detach().numpy(), J1)
-HeatMap(sti.detach().numpy(), r_i.detach().numpy(), J1)
 
 
- 
+
+
 
 
 
@@ -570,75 +579,84 @@ HeatMap(sti.detach().numpy(), r_i.detach().numpy(), J1)
 """
 
 
+
+
 # +++++++++++++++++++++++++ Optimizer ++++++++++++++++++++++++++++
-learning_rate = 0.001 #0.001
+learning_rate = 0.1
 optimizer = optim.SGD(mymodel.parameters(),
-                      lr=learning_rate, weight_decay = 0.0001)#, weight_decay = 0.00001) #, weight_decay = 0.00001)#, weight_decay = 0.001)#0.989
-
-
-
+                      lr=learning_rate)
 # +++++++++++++++++++++++++ Epochs +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-num_epochs = 10
+num_epochs = 2
+
 
 # +++++++++++++++++++++++++ Inputs + Labels +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#X_input = make_it_proba(torch.tensor(stimuli.In)) #make I at time 1000ms a probability function
 X_input = sti
+
 Y_target = get_expected_Y_relu(X_input) #get the expected dirac delta for our particular Input
 losses = torch.zeros(num_epochs) # used to plot the loss at the end
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ RUN forward pass  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+r_enew, rnewi = mymodel.forward(X_input)
+
+
+
 
 # +++++++++++++++++++++++++ Problems investigations +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # import tracemalloc
 # tracemalloc.start()
-mymodel.train()
-criterion = nn.CrossEntropyLoss()#.cuda()
+#mymodel2.train()
 
 # +++++++++++++++++++++++++ Optimization loop +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 with torch.autograd.set_detect_anomaly(False):
     for epoch in range(num_epochs):
         # Create a new input tensor for each epoch
-        #X_input.requires_grad = False 
+        X_input.requires_grad = False 
         # Clear the gradients 
         optimizer.zero_grad()
 
         # calculate output
         Y_prediction, I = mymodel(X_input) 
-        #ic(Y_prediction.grad_fn)
+        ic(Y_prediction.grad_fn)
+        #Y_prediction_proba = (Y_prediction) #make_it_proba + 1
+        #ic(Y_prediction_proba.grad_fn)
         
         # calculate loss
-        Y_prediction_prob = make_it_proba(Y_prediction)
-        loss = (torch.mean((Y_prediction_prob - Y_target)**2))  
-        #loss = torch.sum(torch.sum((Y_prediction_prob-Y_target), axis =1))#Using this loss I loase the gradient with SGD 
-        #loss = criterion(Y_prediction_prob, Y_target) #t
-
-        #ic(loss.grad_fn)
- 
+        #eps = torch.tensor(1e-6, requires_grad=True)
+        loss = (torch.mean((Y_prediction - Y_target)**2))  
+        """ic(loss.grad_fn)
+        if loss.isnan(): 
+            loss=eps
+            ic(eps.grad_fn)
+        else: 
+            loss = loss
+            print("hey you")
+        """
+        torch.nn.utils.clip_grad_norm_(mymodel.parameters(), max_norm=1.0)  # Adjust max_norm as needed
+        
         loss.backward()
         
-        #torch.nn.utils.clip_grad_norm_(mymodel.parameters(), -5, 5)  # Adjust max_norm as needed
-   
         optimizer.step()
 
         losses[epoch] = loss
-        print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss}, Loss_grad: {loss.grad_fn}')  # .item()
+        print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss}, Loss_grad: {loss.grad}')  # .item()
         for i, par in enumerate(mymodel.parameters()):
            ic(J_list[i], par, par.grad)
      
-
-"""
-*
-*  Plot the loss over epochs
-*
-"""
-
-plt.plot(np.arange(losses.shape[0]), losses.detach().numpy(), 'bo', label='Training loss')
-
-plt.title(f"Loss over {num_epochs} epochs for a learning rate of {learning_rate}")
-plt.show()
 
 
 
 
 # check if input has zeros 
-#torch.all(losses) # return True if there are zeros, otherwise return False
+#np.all(losses) # return True if there are zeros, otherwise return False
 
 # check if input has nans 
-#torch.any(torch.isnan(losses)) # return True if there are nans, otherwise return False
+#np.any(np.isnan(losses)) # return True if there are nans, otherwise return False
+
+
+plt.plot(np.arange(losses.shape[0]), losses.detach().numpy(), 'bo', label='Training loss')
+#plt.ylim([0.7179871796,0.71798718])
+#plt.axhline(y=0.7179871780183, color='blue', linestyle='-', label='Training loss')
+
+plt.title(f"Loss over {num_epochs} epochs for a learning rate of {learning_rate}")
+plt.show()
