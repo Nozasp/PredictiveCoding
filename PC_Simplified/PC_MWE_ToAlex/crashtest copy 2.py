@@ -134,7 +134,7 @@ def dog_filter(sOut, N):
     gaussIn = np.exp(-(k - k[:, np.newaxis]) ** 2 / (2 * sIn ** 2))
     gaussOut = np.exp(-(k - k[:, np.newaxis]) ** 2 / (2 * sOut ** 2))
     dog = gaussOut - gaussIn
-    
+
     if np.max(dog) == 0 or None:
         print('zero max')
         dog = 0
@@ -579,7 +579,7 @@ optimizer = optim.SGD(mymodel.parameters(),
 
 
 # +++++++++++++++++++++++++ Epochs +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-num_epochs = 10
+num_epochs = 1
 
 # +++++++++++++++++++++++++ Inputs + Labels +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 X_input = sti
@@ -643,3 +643,163 @@ plt.show()
 
 # check if input has nans 
 #torch.any(torch.isnan(losses)) # return True if there are nans, otherwise return False
+
+""" ------------------
+*
+*
+*
+* * *   Try new parameters here !
+*
+*
+*
+""" #------------------
+
+
+
+"""
+ic| J_list[i]: 'Jee'
+    par: Parameter containing:
+         tensor(0.0720, dtype=torch.float64, requires_grad=True)
+    par.grad: tensor(7.8681e-05, dtype=torch.float64)
+ic| J_list[i]: 'Jei'
+    par: Parameter containing:
+         tensor(0.0025, dtype=torch.float64, requires_grad=True)
+    par.grad: tensor(0.0024, dtype=torch.float64)
+ic| J_list[i]: 'Jie'
+    par: Parameter containing:
+         tensor(0.0490, dtype=torch.float64, requires_grad=True)
+    par.grad: tensor(0.0895, dtype=torch.float64)
+ic| J_list[i]: 'Jii'
+    par: Parameter containing:
+         tensor(0.6000, dtype=torch.float64, requires_grad=True)
+    par.grad: tensor(-0.0004, dtype=torch.float64)
+ic| J_list[i]: 'Jin'
+    par: Parameter containing:
+         tensor(0.0080, dtype=torch.float64, requires_grad=True)
+    par.grad: tensor(-0.0071, dtype=torch.float64)
+"""
+
+
+
+
+
+class MyModel_time_newParam(nn.Module):
+    def __init__(self): 
+        super(MyModel_time_newParam, self).__init__()
+      
+        #--- Define other model parameters, layers, or components here if needed
+        self.dt = torch.tensor(1e-4) #sim.dt 
+        self.N = 20 
+        self.taue = self.taui = torch.tensor(0.005)
+         # ¤ parameter of the phi function Not tweakable parameters
+        self.ae = torch.tensor(18.26)  # 2 #Wong have to check # Modelling and Meg Gain of the E populaiton
+        self.be = torch.tensor(-5.38)  # Threshold of the E populaiton
+        self.hme = torch.tensor(78.67)
+        self.ai = torch.tensor(21.97)
+        self.bi = torch.tensor(-4.81)
+        self.hmi = torch.tensor(125.62)
+        #create the smallest possible number
+        self.epsilon = sys.float_info.epsilon
+        
+        self.sIn = torch.tensor(.1)
+        self.sOut= 3.
+        self.sEI = .2
+        self.tauAMPA = torch.tensor(0.002) 
+        self.tauGABA = torch.tensor(0.005)
+        
+        self.wei = torch.tensor(dog_filter(self.sOut, int(self.N)), dtype=torch.float32)   
+        self.wii = torch.tensor(np.eye(int(self.N)), dtype=torch.float32) # dog_filter(sIn, sOut, N)#np.eye(N) #
+        self.wie = torch.tensor(gaussian_filter(self.sEI, int(self.N)), dtype=torch.float32) #.astype(torch.float32))  # dog_filter(sIn, sOut, N)
+        self.wes = torch.tensor(np.eye(int(self.N)), dtype=torch.float32)  # Identity matrix
+
+        self.Jee = nn.Parameter(torch.tensor(0.0720, requires_grad= True, dtype= torch.float64))#, requires_grad=False, dtype=torch.float32)#I replaced .072 by 0.072
+        #ic(self.Jee.grad_fn) #should be none
+        self.Jei = nn.Parameter(torch.tensor(0.0025, requires_grad= True, dtype= torch.float64)) 
+        self.Jie = nn.Parameter(torch.tensor(0.0490, requires_grad=True, dtype=torch.float64))
+        self.Jii = nn.Parameter(torch.tensor(0.6000, requires_grad=True, dtype=torch.float64))
+        self.Jin = nn.Parameter(torch.tensor(0.0080, requires_grad= True, dtype=torch.float64))
+    
+    def phi(self, I_tot, a, b, hm): #)))  # this use a lot of memory - exponential part
+        #multi= torch.nan_to_num((torch.mul(a, I_tot) + b), nan = self.epsilon, posinf=140, neginf=self.epsilon)
+        
+        for i in range(I_tot.shape[0]):
+                if torch.isnan(I_tot[i])== True:
+                    ic(I_tot, i)
+                    exit()
+
+        mulan =torch.mul(a, I_tot)
+        
+        multi= mulan + b
+        
+        expo = torch.exp(- (multi))  #.abs()+ self.epsilon)
+        return torch.multiply(hm, torch.divide(1, (1+ expo)))  
+
+    def forward(self, In):
+        #--- Initialize model variables here
+        prev_r_e = torch.zeros((In.shape[0], self.N)) # torch.ones(self.N) shows more obvious results
+        prev_r_i = torch.zeros((In.shape[0], self.N)) 
+        prev_s_ampa = torch.zeros((In.shape[0], self.N)) 
+        prev_s_gaba = torch.zeros((In.shape[0], self.N)) 
+        s_ampa = torch.tensor(0.)
+        i_tot_e = torch.tensor(0.)
+        i_tot_i = torch.tensor(0.)
+
+        for k in range(1, In.shape[0]):
+            #--- Compute values of interest
+            #the operation Jee_re = self.Jee * prev_r_e => triggers inplace error
+            s_gaba_wie = prev_s_gaba[k-1,:] @ self.wie
+            s_ampa_wei = prev_s_ampa[k-1,:] @ self.wei
+            s_gaba_wii = prev_s_gaba[k-1,:] @ self.wii
+            JeeAmpa =  torch.mul(self.Jee, s_ampa)
+            i_tot_e = torch.add(torch.subtract(JeeAmpa, torch.mul(self.Jie, s_gaba_wie)), torch.mul(self.Jin, In[k - 1, :]))
+            i_tot_i = torch.subtract(torch.mul(self.Jei, s_ampa_wei), torch.mul(self.Jii, s_gaba_wii))
+       
+            phi_arr_e = self.phi(i_tot_e, self.ae, self.be, self.hme)
+            phi_arr_i = self.phi(i_tot_i, self.ai, self.bi, self.hmi)
+
+            dr_e_dt = (-prev_r_e[k - 1, :] + phi_arr_e) / self.taue
+            dr_i_dt = (-prev_r_i[k - 1, :] + phi_arr_i) / self.taui
+
+            r_e = prev_r_e[k - 1, :] + dr_e_dt * self.dt
+            r_i = prev_r_i[k - 1, :] + dr_i_dt * self.dt
+
+            dS_amp_dt = (- prev_s_ampa[k - 1, :] / self.tauAMPA) + r_e
+            s_ampa = prev_s_ampa[k - 1, :] + dS_amp_dt * self.dt
+
+            dS_gab_dt = (- prev_s_gaba[k - 1, :] / self.tauGABA) + r_i
+            s_gaba = prev_s_gaba[k - 1, :] + dS_gab_dt * self.dt
+            
+            prev_r_e[k,:] = r_e
+            prev_r_i[k,:] = r_i
+            prev_s_ampa[k,:] = s_ampa
+            prev_s_gaba[k,:] = s_gaba
+            
+
+            dr_e_dt = torch.div(torch.add(torch.neg(prev_r_e[k-1,:]), phi_arr_e), self.taue)
+            dr_i_dt = torch.div(torch.add(torch.neg(prev_r_i[k-1,:]), phi_arr_i), self.taui)
+            #ic(dr_e_dt.grad_fn)
+
+            r_e = torch.mul(torch.add(torch.neg(prev_r_e[k-1,:]), dr_e_dt), self.dt)# torch.multiply(), self.newfactor)
+            #ic(r_e.grad_fn, r_e.shape)
+            r_i = torch.mul(torch.add(torch.neg(prev_r_i[k-1,:]), dr_i_dt), self.dt)
+            
+                
+            dS_amp_dt = torch.add(torch.divide(- prev_s_ampa[k-1,:], self.tauAMPA), r_e)
+            s_ampa = torch.mul(torch.add(prev_s_ampa[k-1,:], dS_amp_dt), self.dt)
+            #ic(dS_amp_dt.grad_fn, s_ampa.grad_fn)
+            dS_gab_dt = torch.add(torch.divide(- prev_s_gaba[k-1,:], self.tauGABA), r_i)
+            s_gaba = torch.mul(torch.add(prev_s_gaba[k-1,:], dS_gab_dt), self.dt)
+            
+            
+        return prev_r_e, prev_r_i
+    
+
+
+myModel_mewParam = MyModel_time_newParam()
+
+r_e_newparam, r_i_newparam = myModel_mewParam.forward(sti)
+print(myModel_mewParam.Jee.item(), myModel_mewParam.Jee.float())
+J2 = {'Jee': myModel_mewParam.Jee.item() , 'Jei': myModel_mewParam.Jei.item(), 'Jie': myModel_mewParam.Jie.item(), 'Jii': myModel_mewParam.Jii.item(), 'Jin': myModel_mewParam.Jin.item()}
+
+
+HeatMap(r_e_newparam.detach().numpy(), r_i_newparam.detach().numpy(), J2)
