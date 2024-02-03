@@ -134,7 +134,7 @@ def dog_filter(sOut, N):
     gaussIn = np.exp(-(k - k[:, np.newaxis]) ** 2 / (2 * sIn ** 2))
     gaussOut = np.exp(-(k - k[:, np.newaxis]) ** 2 / (2 * sOut ** 2))
     dog = gaussOut - gaussIn
-    
+
     if np.max(dog) == 0 or None:
         print('zero max')
         dog = 0
@@ -643,3 +643,4 @@ plt.show()
 
 # check if input has nans 
 #torch.any(torch.isnan(losses)) # return True if there are nans, otherwise return False
+
