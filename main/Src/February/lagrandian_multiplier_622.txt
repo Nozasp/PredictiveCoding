@@ -1,0 +1,1 @@
+{"normalization": 300, "derivative": 1e-06, "hyperactivity": 1e-08, "laziness": 0.01, "distance_diag": 0.1, "sparse_coding": 0.039, "be_positive": 100}

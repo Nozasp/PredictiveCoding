@@ -37,15 +37,18 @@ def default_parameters_network(**kwargs):
     pars['I1'] = pars['Jext'] * pars['mu0'] * (1 + pars['c_dash'] / 100)
     pars['I2'] = pars['Jext'] * pars['mu0'] * (1 - pars['c_dash'] / 100)
     # ¤ conductivities: the strength of the synaptic connection
-    pars['Jee'] = 0.2;  # nA #recurrence parameter - Parameter I can tweak
-    pars['Jie'] = 0.2;  # nA
-    pars['Jei'] = 1.4;  # nA
-    pars['Jii'] = 6.7;  # nA
-    pars['Jin'] = 0.008;  # nA
-    pars['Jiq'] = 0.85;  # nA
-    pars['Jes'] = 3.5;  # nA
-    pars['Jsi'] = 0.12;  # nA
-    pars['Jem'] = 2.2;  # nA
+    pars['Jee'] = .072#0.2;  # nA #recurrence parameter - Parameter I can tweak
+    pars['Jie'] = .05 #0.2;  # nA
+    pars['Jei'] = .004#1.4;  # nA
+    pars['Jii'] = .6#6.7;  # nA
+    pars['Jin'] = .00695 #0.008;  # nA
+
+    #pars['Jiq'] = 0.85;  # nA
+    #pars['Jes'] = 3.5;  # nA
+    #pars['Jsi'] = 0.12;  # nA
+    #pars['Jem'] = 2.2;  # nA
+
+    #J1 = {'Jee': 0.072, 'Jei': 0.004, 'Jie': 0.05, 'Jii': 0.6, 'Jin': 0.00695}
 
     # I noise
     pars['sigma'] = 0.0007;  # noise amplitude [Wong 2006]   # it s 0.007 (nA) instead !!!

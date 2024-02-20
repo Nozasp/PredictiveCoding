@@ -1,0 +1,25 @@
+
+#https://stackoverflow.com/questions/38708621/how-to-calculate-percentage-of-sparsity-for-a-numpy-array-matrix#53468487
+"""
+
+Sparcity = 1 - count_nonzero(A)/total_elements_of_A
+
+"""
+from numpy import array
+from numpy import count_nonzero
+import numpy as np
+
+# create dense matrix
+A = array([[1, 1, 0, 1, 0, 0], [1, 0, 2, 0, 0, 1], [99, 0, 0, 2, 0, 0]])
+
+#If you have Nan
+A = np.nan_to_num(A,0)
+
+print(A)
+#[[ 1  1  0  1  0  0]
+# [ 1  0  2  0  0  1]
+# [99  0  0  2  0  0]]
+
+# calculate sparsity
+sparsity = 1.0 - ( count_nonzero(A) / float(A.size) )
+print(sparsity)
