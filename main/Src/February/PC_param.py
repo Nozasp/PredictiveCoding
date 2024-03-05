@@ -16,8 +16,8 @@ def default_parameters_network(**kwargs):
     pars['taue'] = 0.005#0.005#0.020;  # seconds [Brunel 2001] (4.5 +- 2.4 ms)
     pars['taui'] = 0.005#0.005 #0.010;  # seconds [Brunel 2001] (4.5 +- 2.4 ms)
     pars['tauNMDA'] = 0.100;  # NMDA-gating time constants (s) [Brunel 2001]
-    pars['tauGABA'] = 0.005; #0.005 # GABA-gating time constants (s) [Brunel 2001]
-    pars['tauAMPA'] = 0.002; #0.002 # AMPA-gating time constants (s) [Brunel 2001]  #tells how quickly the neurons integrates its input.
+    pars['tauGABA'] = 0.005; #0.005 # GABA-gating time constants (s) [Brunel 2001]Salin and Prince, 1996; Xiang et al., 1998 wong and wang 2002
+    pars['tauAMPA'] = 0.002; #0.002 # AMPA-gating time constants (s) [Brunel 2001]  Hestrin et al., 1990; Spruston et al., 1995) , wong and wang 2002 ,and brunel 2001 #tells how quickly the neurons integrates its input.
     # the smaller it is, the faster the voltage decay to 0
 
     # ¤ population parameters

@@ -34,3 +34,4 @@ p_v_given_u = (numerator) / p_u
 plt.plot(x, p_v_given_u)
 plt.xlabel('v')
 plt.ylabel('p(v|u)')
+plt.show()
