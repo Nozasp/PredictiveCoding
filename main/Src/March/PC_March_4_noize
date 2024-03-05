@@ -304,6 +304,17 @@ def init_random_matrix(N, mu = 0.):
             rnd_matrix[i][j] = X.rvs(1)# np.random.uniform(low=0.0, high=1.0, size=1) #X.rvs(1)
     return rnd_matrix 
 
+def init_random_gaussian(N, mu =0.):
+    lower, upper = 0., np.inf
+    sigma = 1/np.sqrt(N)#random.randint(1, 30), random.uniform(0.1, 5)
+    X = stats.truncnorm(
+        (lower - mu) / sigma, (upper - mu) / sigma, loc=mu, scale=sigma)
+    rnd_tensor = torch.tensor((N,))
+    for i in range(N):
+        rnd_tensor[i] = X.rvs(1) 
+
+    return rnd_tensor
+
 
 """
  Normalization or transform to probability
@@ -803,8 +814,9 @@ class Model(nn.Module):
         """with open(file_name, "rb") as file:
             loaded_wee_wii = pickle.load(file)"""
         #self.Inoise = np.random.randn()
-        self.I_noise_E = np.random.normal(.2, .2, 1) #(0, .02, 1)
-        self.I_noise_I = np.random.normal(0, .02, 1)
+        self.I_noise_E = torch.randn(size= (self.N,), dtype=torch.float32) #* 0.02 # if I want to change sigma #.astype(torch.float32)#(.2, .2, 1) #(0, .02, 1)
+        self.I_noise_E = torch.tensor(init_random_gaussian(self.N), dtype = torch.float32)
+        #self.I_noise_I = torch.randn(0, .02, 1)
 
         self.wii =  torch.tensor(np.eye(int(self.N)), dtype=torch.float32) # self.wii =torch.tensor(loaded_wee_wii.detach().numpy() , dtype=torch.float32) #!!! N = 30  ## dog_filter(sIn, sOut, N)#np.eye(N) #
         self.wee = torch.tensor(np.eye(int(self.N)), dtype=torch.float32) #self.wee = torch.tensor(loaded_wee_wii.detach().numpy() , dtype=torch.float32) #
@@ -884,7 +896,7 @@ class Model(nn.Module):
         s_gaba_wii = self.prev_s_gaba @ self.wii
         s_ampa_wee = self.prev_s_ampa @ self.wee
       
-        self.i_tot_e = (self.Jee * s_ampa_wee) - (self.Jie * s_gaba_wie) + (self.Jin*  In)
+        self.i_tot_e = (self.Jee * s_ampa_wee) - (self.Jie * s_gaba_wie) + (self.Jin*  (In+self.I_noise_E))
         self.i_tot_i = (self.Jei * s_ampa_wei) - (self.Jii * s_gaba_wii)
 
         phi_arr_e = self.phi(self.i_tot_e, self.ae, self.be, self.hme)
