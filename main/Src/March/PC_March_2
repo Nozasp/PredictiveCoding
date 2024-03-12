@@ -310,13 +310,13 @@ def init_random_matrix(N, mu = 0.):
 """
 
 def make_it_proba(r_e):
-    eps = torch.FloatTensor([sys.float_info.epsilon]) #torch.FloatTensor
+    eps = torch.FloatTensor([sys.float_info.epsilon]) 
     r_e_max = torch.max(r_e, eps.expand_as(r_e))
-    threshold = 5# torch.FloatTensor([5]).expand_as(r_e[10,:])
+    threshold = 5                                                            # torch.FloatTensor([5]).expand_as(r_e[10,:])
     sum_r_e = torch.sum(r_e, 1).reshape(r_e.shape[0], 1)
  
     prob_r= 0.5 * (1 + torch.tanh(sum_r_e - threshold))*(r_e_max / sum_r_e) #r_e_max.sum())
-    return prob_r #.reshape(r_e.shape[0], r_e.shape[1]) 
+    return prob_r                                                           #.reshape(r_e.shape[0], r_e.shape[1]) 
 
 def softmax(x):
     return torch.exp(x) / torch.sum(torch.exp(x), axis=1, keepdims=True)

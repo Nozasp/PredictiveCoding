@@ -304,25 +304,34 @@ def init_random_matrix(N, mu = 0.):
             rnd_matrix[i][j] = X.rvs(1)# np.random.uniform(low=0.0, high=1.0, size=1) #X.rvs(1)
     return rnd_matrix 
 
-def init_random_gaussian(N, mu =0.):
+def init_random_Tgaussian(N, mu =0.):
     lower, upper = 0., np.inf
-    sigma = 1/np.sqrt(N)#random.randint(1, 30), random.uniform(0.1, 5)
+    sigma = 1/np.sqrt(N)                                                                  #random.randint(1, 30), random.uniform(0.1, 5)
     X = stats.truncnorm(
         (lower - mu) / sigma, (upper - mu) / sigma, loc=mu, scale=sigma)
-    rnd_tensor = torch.tensor((N,))
-    for i in range(N):
-        rnd_tensor[i] = X.rvs(1) 
 
-    return rnd_tensor
+    rnd_tensor = X.rvs(N) 
+
+    return torch.tensor(rnd_tensor)
+
+"""#
+    rnd_tensor = np.zeros(N)
+    for i in range(N):"""
 
 
+#print(P.shape)
 """
  Normalization or transform to probability
 """
-
+#!!!!!!!!! if 0 devide by noizy term
 def make_it_proba(r_e):
-    eps = torch.FloatTensor([sys.float_info.epsilon]) #torch.FloatTensor
-    r_e_max = torch.max(r_e, eps.expand_as(r_e))
+    #eps = torch.FloatTensor([sys.float_info.epsilon]) #torch.FloatTensor
+    noisy_term = init_random_Tgaussian(r_e.shape[1])
+    #ic(r_e.shape[1])
+    #ic(noisy_term.shape)
+    r_e_max = torch.max(r_e, noisy_term)
+    #ic(r_e_max)
+    #r_e_max = torch.max(r_e, eps.expand_as(r_e))#noisy_term)#
     threshold = 5# torch.FloatTensor([5]).expand_as(r_e[10,:])
     sum_r_e = torch.sum(r_e, 1).reshape(r_e.shape[0], 1)
  
@@ -814,8 +823,11 @@ class Model(nn.Module):
         """with open(file_name, "rb") as file:
             loaded_wee_wii = pickle.load(file)"""
         #self.Inoise = np.random.randn()
-        self.I_noise_E = torch.randn(size= (self.N,), dtype=torch.float32) #* 0.02 # if I want to change sigma #.astype(torch.float32)#(.2, .2, 1) #(0, .02, 1)
-        self.I_noise_E = torch.tensor(init_random_gaussian(self.N), dtype = torch.float32)
+        #self.I_noise_E = torch.randn(size= (self.N,), dtype=torch.float32) #* 0.02 # if I want to change sigma #.astype(torch.float32)#(.2, .2, 1) #(0, .02, 1)
+        self.I_noise_E = torch.tensor(init_random_Tgaussian(self.N), dtype = torch.float32)
+        self.Se_noise = torch.tensor(init_random_Tgaussian(self.N), dtype = torch.float32)
+        self.Si_noise = torch.tensor(init_random_Tgaussian(self.N), dtype = torch.float32)
+
         #self.I_noise_I = torch.randn(0, .02, 1)
 
         self.wii =  torch.tensor(np.eye(int(self.N)), dtype=torch.float32) # self.wii =torch.tensor(loaded_wee_wii.detach().numpy() , dtype=torch.float32) #!!! N = 30  ## dog_filter(sIn, sOut, N)#np.eye(N) #
@@ -887,31 +899,32 @@ class Model(nn.Module):
         addB = mulaI + b
         expo = torch.exp(-addB)
         return hm / (1 + expo)
-     
+    #the operation Jee_re = self.Jee * prev_r_e => triggers inplace error  
+
     def forward(self, In):
         #--- Compute values of interest
-        #the operation Jee_re = self.Jee * prev_r_e => triggers inplace error
+   
         s_gaba_wie = self.prev_s_gaba @ self.wie
         s_ampa_wei = self.prev_s_ampa @ self.wei
         s_gaba_wii = self.prev_s_gaba @ self.wii
         s_ampa_wee = self.prev_s_ampa @ self.wee
       
-        self.i_tot_e = (self.Jee * s_ampa_wee) - (self.Jie * s_gaba_wie) + (self.Jin*  (In+self.I_noise_E))
+        self.i_tot_e = (self.Jee * s_ampa_wee) - (self.Jie * s_gaba_wie) + (self.Jin* (In)) #+ self.I_noise_E
         self.i_tot_i = (self.Jei * s_ampa_wei) - (self.Jii * s_gaba_wii)
 
         phi_arr_e = self.phi(self.i_tot_e, self.ae, self.be, self.hme)
         phi_arr_i = self.phi(self.i_tot_i, self.ai, self.bi, self.hmi)
 
-        self.dr_e_dt = (-self.prev_r_e + phi_arr_e) / self.taue
-        self.dr_i_dt = (-self.prev_r_i + phi_arr_i) / self.taui
+        self.dr_e_dt = ((-self.prev_r_e + phi_arr_e) / self.taue)
+        self.dr_i_dt = ((-self.prev_r_i + phi_arr_i) / self.taui)
 
         r_e = self.prev_r_e+ self.dr_e_dt * self.dt
         r_i = self.prev_r_i + self.dr_i_dt * self.dt
 
-        dS_amp_dt = (- self.prev_s_ampa / self.tauAMPA) + r_e
+        dS_amp_dt = (- self.prev_s_ampa / self.tauAMPA) + r_e + self.Se_noise
         s_ampa = self.prev_s_ampa+ dS_amp_dt * self.dt
 
-        dS_gab_dt = (- self.prev_s_gaba / self.tauGABA) + r_i
+        dS_gab_dt = (- self.prev_s_gaba / self.tauGABA) + r_i + self.Si_noise
         s_gaba = self.prev_s_gaba + dS_gab_dt * self.dt
 
         self.prev_r_e = r_e
@@ -939,9 +952,11 @@ class Model(nn.Module):
 
 #self.total_custom_loss(Prediction, Target, derivativeE)
 
-def decoding_loss(Target_idx_np, lagrangian_multipliers, Prediction, Target, derivativeE):
+def decoding_loss(Target_idx_np, lagrangian_multipliers, Prediction, Target, derivativeE, noisy_RE):
     criterion = torch.nn.NLLLoss()
-    P2 = make_it_proba(Prediction)
+    tot_P =Prediction + noisy_RE
+
+    P2 = make_it_proba(tot_P)
     loss_norm = criterion(P2, Target.long())    
 
     loss_derivative = torch.zeros_like(Target)     #loss_derivative.fill_(float('nan'))
@@ -1037,13 +1052,15 @@ def architecture_efficiency(parm, lagrangian_multipliers,N):
 #@jit(target_backend='cuda') 
 
 def total_custom_loss(model_t, Prediction, I, Target, derivativeE, lagrangian_multipliers, N, eps): #, model !!!
+    noisy_RE = torch.tensor(init_random_Tgaussian(N), dtype = torch.float32)
+    #noisy_RI = torch.tensor(init_random_Tgaussian(N), dtype = torch.float32)
     
     Target_idx_np = Target.numpy().astype(int)
     parm = {name: par for name, par in model_t.named_parameters()}
     #ic(parm.keys())
     #for name, par in model_t.named_parameters() : # enumerate(trained_model.parameters()):
      #       parm[name] = par 
-    _norm, _derivative = decoding_loss(Target_idx_np, lagrangian_multipliers,Prediction, Target, derivativeE)#_derivative
+    _norm, _derivative = decoding_loss(Target_idx_np, lagrangian_multipliers,Prediction, Target, derivativeE, noisy_RE)#_derivative
     hyper_coef, lazy_coef, positive_param = control_system(Target_idx_np, parm, lagrangian_multipliers, eps, Prediction)
     sparse_cod = activity_efficiency(Prediction,I, lagrangian_multipliers)
     cost_dis_inh = architecture_efficiency(parm, lagrangian_multipliers, N)
@@ -1176,9 +1193,11 @@ class run_optimization:
         fig1.savefig(f'C:/Users/knzga/Documents/02_Computational Neuroscience Project/Image/OutputNetwork/Pred_losses_{learning_rate}_{num_epoch}_sp{sparse}__dd{distance_D}_{rand_num_fig:0>3}.png')
         #save_weights(model, "Optimized.pth")
         save_weights(model, modelpath)
+        connectivity_matrix_2x2(model, Learning_Rate =learning_rate , n_epoch =num_epoch, sparce = sparse, distance_diag = distance_D)    
+        plt.show()
 
-        plot_connectivity_matrix(model, rand_num_fig, Learning_Rate= learning_rate, n_epoch= num_epoch, sparce= sparse, distance_diag = distance_D)
-        plt.show()                
+        #plot_connectivity_matrix(model, rand_num_fig, Learning_Rate= learning_rate, n_epoch= num_epoch, sparce= sparse, distance_diag = distance_D)
+        #plt.show()                
 
 
 
@@ -1211,24 +1230,27 @@ if __name__=="__main__":
     print(J1['Jee'], J_list)
 
 
-    num_epoch = 1500# 1600#good good 1500#1700# 1500
+    num_epoch = 800# 1600#good good 1500#1700# 1500
 
     #Epoch=[800, 1200, 1500, 1800]
 
 
-    Sparse_coefs = [5E-3]#1E-2 good,[510E-2]#[610E-2]#[510E-2]#good[610E-2]#[510E-2] # [210E-2,110E-2,910E-3,860E-3,810E-3] #[800E-3, 770E-3,760E-3, 755E-3,750E-3] #610E-3 # 750E-3 # 610E-3            #395E-3#200E-3 #140E-3#120E-3#115E-3
-    #sparse = 510E-2#510E-2##610E-2#510E-2#
+    Sparse_coefs = [1E-3]#1E-2 good,[510E-2]#[610E-2]#[510E-2]#good[610E-2]#[510E-2] # [210E-2,110E-2,910E-3,860E-3,810E-3] #[800E-3, 770E-3,760E-3, 755E-3,750E-3] #610E-3 # 750E-3 # 610E-3            #395E-3#200E-3 #140E-3#120E-3#115E-3
+    sparse = 5E-3#1E-3 #510E-2#510E-2##610E-2#510E-2#
     optim_list = []
     #distance_diag = [300E-2]#good good[300E-2]#good[300E-2]#[300E-2, 315E-2]# , 185E-2,180E-2]#[180E-2]#, 190E-2,180E-2, 160E-2] #180E-2 good, 100E-2]#[100E-2] #[30E-2]#10E-2 #31E-2, 31E-2, 45E-2, 40E-2[15E-2]    #[25E-2] #[35E-2] #[25E-2]#[15E-2]           #[12E-2, 15E-2, 20E-2, 40E-2]#1E-1 initial
     #distance_diag = [100E-2,300E-2, 400E-2, 800E-2]# [500E-2]#[500E-2]    
     distance_diag = [300E-2]#[2E-2]#,10E-2,40E-2, 60E-2, 200E-2
     dist = 300E-2#[15E-2]    #[25E-2] #[35E-2] #[25E-2]#[15E-2]           #[12E-2, 15E-2, 20E-2, 40E-2]#1E-1 initial
-    lr = 8E-4#2E-3#18E-4#2E-3#18E-4#2E-3 goof good#22E-4 #22E-4# 25E-4 #[2E-3]
+    #lr = 1E-2
+    LR = [349E-6]#[1E-3,1E-4,1E-5,1E-6,1E-7,1E-8,1E-9,1]
+    #not good 3E-4#2E-3#18E-4#2E-3#not good18E-4#2E-3 goof good#22E-4 #22E-4# 25E-4 #[2E-3]
 
     #Sparse_coefs = [115E-3]
     #for i, num_epoch in enumerate(Epoch):
     #for i, dist in enumerate(distance_diag):
-    for i, sparse in enumerate(Sparse_coefs):
+    #for i, sparse in enumerate(Sparse_coefs):
+    for i, lr in enumerate(LR):
         model_new = Model(param,sim, J1, Input_NLLL)
         result = run_optimization(model_new, opti_name = "Adam" ,num_epoch = num_epoch, learning_rate = lr, sparse_coef = sparse, dist_diag= dist)
         start = timer()

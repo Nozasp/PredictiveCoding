@@ -1005,7 +1005,7 @@ def control_system(Target_idx_np, parm, lagrangian_multipliers, eps, Prediction)
 def activity_efficiency(re,ri, lagrangian_multipliers):
     #more selective use of neurons in representing information.
     tau_s = 1#0.001
-    tau_i = 5
+    tau_i = 3
     sparse_coding_wei = lagrangian_multipliers['sparse_coding'] * torch.sum(torch.log1p((re**2 / tau_s)))#log1p = log(1+ (x))#torch.sum(torch.abs(W["wei"])) #)
     sparse_coding_wie = lagrangian_multipliers['sparse_coding'] * torch.sum(torch.log1p((ri**2 / tau_i))) #torch.sum(torch.abs(W["wie"]))#
     sparse_coding_term = (sparse_coding_wei + sparse_coding_wie) 
@@ -1046,7 +1046,7 @@ class run_optimization:
     
         self.lagrandian_mul = {'normalization': 4000,'derivative': 1E-6, 'hyperactivity':1E-8, 'laziness': 0.01,
 
-                                    'distance_diag': dist_diag, 'sparse_coding':sparse_coef, 'be_positive': 200}
+                                    'distance_diag': dist_diag, 'sparse_coding':sparse_coef, 'be_positive': 200}#4000 goof
         #distance_diag = 1E-1
 
         #self.criterion = torch.nn.NLLLoss()
@@ -1196,19 +1196,19 @@ if __name__=="__main__":
     print(J1['Jee'], J_list)
 
 
-    num_epoch = 900# 1600#good good 1500#1700# 1500
+    num_epoch = 1800# 1600#good good 1500#1700# 1500
 
     #Epoch=[800, 1200, 1500, 1800]
 
 
-    Sparse_coefs = [6E-3]#1E-2 good,[510E-2]#[610E-2]#[510E-2]#good[610E-2]#[510E-2] # [210E-2,110E-2,910E-3,860E-3,810E-3] #[800E-3, 770E-3,760E-3, 755E-3,750E-3] #610E-3 # 750E-3 # 610E-3            #395E-3#200E-3 #140E-3#120E-3#115E-3
+    Sparse_coefs = [4E-3] #[5E-3] good#1E-2 good,[510E-2]#[610E-2]#[510E-2]#good[610E-2]#[510E-2] # [210E-2,110E-2,910E-3,860E-3,810E-3] #[800E-3, 770E-3,760E-3, 755E-3,750E-3] #610E-3 # 750E-3 # 610E-3            #395E-3#200E-3 #140E-3#120E-3#115E-3
     #sparse = 510E-2#510E-2##610E-2#510E-2#
     optim_list = []
     #distance_diag = [300E-2]#good good[300E-2]#good[300E-2]#[300E-2, 315E-2]# , 185E-2,180E-2]#[180E-2]#, 190E-2,180E-2, 160E-2] #180E-2 good, 100E-2]#[100E-2] #[30E-2]#10E-2 #31E-2, 31E-2, 45E-2, 40E-2[15E-2]    #[25E-2] #[35E-2] #[25E-2]#[15E-2]           #[12E-2, 15E-2, 20E-2, 40E-2]#1E-1 initial
     #distance_diag = [100E-2,300E-2, 400E-2, 800E-2]# [500E-2]#[500E-2]    
     distance_diag = [300E-2]#[2E-2]#,10E-2,40E-2, 60E-2, 200E-2
     dist = 300E-2#[15E-2]    #[25E-2] #[35E-2] #[25E-2]#[15E-2]           #[12E-2, 15E-2, 20E-2, 40E-2]#1E-1 initial
-    lr = 14E-4#2E-3#18E-4#2E-3#18E-4#2E-3 goof good#22E-4 #22E-4# 25E-4 #[2E-3]
+    lr = 6E-4#2E-3#18E-4#2E-3#18E-4#2E-3 goof good#22E-4 #22E-4# 25E-4 #[2E-3]
 
     #Sparse_coefs = [115E-3]
     #for i, num_epoch in enumerate(Epoch):
@@ -1217,6 +1217,7 @@ if __name__=="__main__":
         model_new = Model(param,sim, J1, Input_NLLL)
         result = run_optimization(model_new, opti_name = "Adam" ,num_epoch = num_epoch, learning_rate = lr, sparse_coef = sparse, dist_diag= dist)
         start = timer()
+        ic(lr, sparse)
         result.run(model_new, Input_NLLL, Target_idx_NLLL, modelpath= "Optimized_good_lr_" + f"{lr}" + f"{sparse}"  , num_epoch=num_epoch, learning_rate=lr)
         print("without GPU:", (timer()-start)/ 60, " minutes") 
         optim_list.append(result)
