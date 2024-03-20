@@ -586,7 +586,7 @@ class Parameter:
     Jin: float = pars['Jin']
     #N=20, sIn=.1, sOut=3., sEI=.2
 
-    def __init__(self, sEI=.2, sIn=.1, sOut=3., N=30):  # sEI=4, sIn=.2, sOut=1.2,
+    def __init__(self, sEI=.2, sIn=.1, sOut=3., N=40):  # sEI=4, sIn=.2, sOut=1.2,
         # Weights (from gaussian filter)
         self.N = N  # pars['NumN']
         self.wei = torch.tensor(dog_filter(sOut, int(N)), dtype=torch.float32)   # .astype( torch.float32))  # , dtype='float64'# fun.dLogGaus(.61, N)  #fun.dog_filter(sIn, sOut, N)#gaussian_filter(sEI, N)
@@ -819,7 +819,6 @@ class Model(nn.Module):
         self.tauAMPA = torch.tensor(0.002)
         self.tauGABA = torch.tensor(0.005)
 
-
         """with open(file_name, "rb") as file:
             loaded_wee_wii = pickle.load(file)"""
         #self.Inoise = np.random.randn()
@@ -838,8 +837,6 @@ class Model(nn.Module):
         #self.wii = nn.Parameter(torch.tensor(wii_o, requires_grad = True, dtype = torch.float32)) 
 
         # Example usage for w0 initialization 
-        #self.wie = torch.tensor(gaussian_filter(self.sEI, int(self.N)), dtype=torch.float32) #.astype(torch.float32))  # dog_filter(sIn, sOut, N)
-        #self.wei = torch.tensor(dog_filter(self.sOut, int(self.N)), dtype=torch.float32)         
         wei_o = init_random_matrix(N=self.N)
         wie_o = init_random_matrix(N=self.N)
         
@@ -849,6 +846,8 @@ class Model(nn.Module):
         # initial parameters
         self.wei = nn.Parameter(torch.tensor(wei_o, requires_grad = True, dtype = torch.float32))  
         self.wie = nn.Parameter(torch.tensor(wie_o, requires_grad = True, dtype = torch.float32))
+        #self.wie = torch.tensor(gaussian_filter(self.sEI, int(self.N)), dtype=torch.float32) #.astype(torch.float32))  # dog_filter(sIn, sOut, N)
+        #self.wei = torch.tensor(dog_filter(self.sOut, int(self.N)), dtype=torch.float32)         
 
         self.dicJ = dicJ #kwargs
         
@@ -959,7 +958,7 @@ def decoding_loss(Target_idx_np, lagrangian_multipliers, Prediction, Target, der
 
     loss_derivative = torch.zeros_like(Target)     #loss_derivative.fill_(float('nan'))
     #len_sim_test = len_sim
-    
+    """
     count = 0
     #count += 1
     start = 0
@@ -971,7 +970,7 @@ def decoding_loss(Target_idx_np, lagrangian_multipliers, Prediction, Target, der
             #loss_derivative[i2] = - F.softplus(derivativeE[time_idx,sti_idx] ).mean() + F.softplus(derivativeE[time_idx,:sti_idx]).mean() + F.softplus(derivativeE[time_idx,(sti_idx+1):]).mean()
             start = stop
             stop += len_sim
-    """"""
+    """
     loss_derivative_term = loss_derivative.mean()
     l_norm = loss_norm * lagrangian_multipliers['normalization']
     l_der = loss_derivative_term * lagrangian_multipliers['derivative']
@@ -1249,7 +1248,7 @@ if __name__=="__main__":
     sim = Simulation(dt=1e-3,T=.0510) 
     #sim.printSim()
     # \\\\ Bottom up sensory input
-    stimuli = Stim(param, sim, dur=sim.T, f=[8])
+    stimuli = Stim(param, sim, dur=sim.T, f=[5])
     In, range_sim, len_sim, w, sigmaIn = stimuli.sensoryInput(param, sim, sigmaIn=2.) #2.
     #stimuli.printStim()
 
@@ -1270,7 +1269,31 @@ if __name__=="__main__":
     print(J1['Jee'], J_list)
 
 
-    num_epoch = 600 #2000# 1600#good good 1500#1700# 1500
+
+
+    """J1 = {'Jee': 0.2609, 'Jei': 1.1132, 'Jie': 1.5471, 'Jii': -0.0542, 'Jin': 0.0089} #old Jee: 0.072
+
+    model_n = Model(param,sim, J1, Input_NLLL)
+    model_n.initiate_state()      
+    r_e = torch.zeros(Input_NLLL.shape)   
+    r_i= torch.zeros(Input_NLLL.shape)
+    _2 = torch.zeros(Input_NLLL.shape)
+    print(r_e.shape)
+    #P[i,:], I[i,:], dPdt[i,:], dridt, ampa, gaba 
+    for i, b in enumerate(Target_idx_NLLL):
+        r_e[i,:], r_i[i,:], _2[i,:], _, _, _ = model_n.forward(Input_NLLL[int(i), :])
+    
+    HeatMap(r_e[0:50,:].detach().numpy(), r_i[0:50,:].detach().numpy(), J = J1)
+    
+    print("hello")
+    sys.exit()
+    """
+
+
+
+
+
+    num_epoch = 900 #2000# 1600#good good 1500#1700# 1500
 
 
     #Epoch=[800, 1200, 1500, 1800]
@@ -1284,7 +1307,7 @@ if __name__=="__main__":
     distance_diag = [300E-2]#[2E-2]#,10E-2,40E-2, 60E-2, 200E-2
     dist = 300E-2#[15E-2]    #[25E-2] #[35E-2] #[25E-2]#[15E-2]           #[12E-2, 15E-2, 20E-2, 40E-2]#1E-1 initial
     #lr = 1E-3#2E-3#1E-2
-    lr = 2E-3 #good    #  5E-4
+    lr = 14E-4 #18E-4 #2E-3 #good    #  5E-4
     #lr = 2E-4
     #LR = [2E-3]#[1E-3]#[5E-3] #[2E-3] 
     #not good 3E-4#2E-3#18E-4#2E-3#not good18E-4#2E-3 goof good#22E-4 #22E-4# 25E-4 #[2E-3]

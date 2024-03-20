@@ -352,7 +352,7 @@ def make_it_proba(r_e, offset = 1):
     eps = torch.FloatTensor([sys.float_info.epsilon]) #torch.FloatTensor
     #offset = 0.5 #eps #1 # 5
     sigma = 0.025#works well 0.025 #works0.1 #0.01 #0.025
-    noisy_term = offset + torch.tensor(init_random_Tgaussian(r_e.shape[1], mu = 0., sigma = sigma))#, dtype = torch.float32
+    noisy_term = torch.tensor(init_random_Tgaussian(r_e.shape[1], mu = 1, sigma = sigma))#, dtype = torch.float32 #offset
     unormalised_prob = r_e + (noisy_term)
     prob_r = unormalised_prob / (unormalised_prob).sum(1, keepdims = True)
     return prob_r 
@@ -968,7 +968,7 @@ def decoding_loss(Target_idx_np, lagrangian_multipliers, Prediction, Target, der
     loss_derivative = torch.zeros_like(Target)     #loss_derivative.fill_(float('nan'))
     #len_sim_test = len_sim
     
-    count = 0
+    """count = 0
     #count += 1
     start = 0
     stop = (len_sim)
@@ -978,7 +978,7 @@ def decoding_loss(Target_idx_np, lagrangian_multipliers, Prediction, Target, der
             loss_derivative[i] = - (F.softplus(derivativeE[start:stop,sti_idx] ).sum() * 4) + F.softplus(derivativeE[start:stop,:sti_idx]).sum() + F.softplus(derivativeE[start:stop,(sti_idx+1):]).sum()
             #loss_derivative[i2] = - F.softplus(derivativeE[time_idx,sti_idx] ).mean() + F.softplus(derivativeE[time_idx,:sti_idx]).mean() + F.softplus(derivativeE[time_idx,(sti_idx+1):]).mean()
             start = stop
-            stop += len_sim
+            stop += len_sim"""
     """"""
     loss_derivative_term = loss_derivative.mean()
     l_norm = loss_norm * lagrangian_multipliers['normalization']

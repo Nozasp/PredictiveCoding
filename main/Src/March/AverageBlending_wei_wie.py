@@ -124,6 +124,7 @@ file_name.append("WIE_sp0.001_dd3.0_norm6000_74.pkl")
 file_name.append("WIE_sp0.001_dd3.0_norm6000_456.pkl")
 file_name.append("WIE_sp0.001_dd3.0_norm7000_933.pkl")
 file_name.append("WIE_sp0.001_dd3.0_norm7000_563.pkl")
+file_name.append("WIE_sp0.001_dd3.0_norm7000_580.pkl")
 loaded_wie = [0]*len(file_name)
 for i in range(len(file_name)):
     with open(file_name[i], "rb") as file:
@@ -132,6 +133,7 @@ for i in range(len(file_name)):
 
 file_name2 = []
 
+file_name2.append("WEI_sp0.001_dd3.0_norm7000_580.pkl")
 file_name2.append("WEI_sp0.001_dd3.0_norm7000_563.pkl")
 file_name2.append("WEI_sp0.001_dd3.0_norm6000_456.pkl")
 file_name2.append("WEI_sp0.001_dd3.0_norm7000_933.pkl")
