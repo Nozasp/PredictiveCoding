@@ -662,11 +662,11 @@ class Stim:
         # norm_w = (w.T / totalAct).T # elementwise division
         
        
-        """In = np.where(f_stim or self.f_stim > 0, (InMax or self.InMax) * w + (In0 or self.In0),
+        In = np.where(f_stim or self.f_stim > 0, (InMax or self.InMax) * w + (In0 or self.In0),
                 0)  # if stim >0 give InMax * weight + In0 otherwise give 0
         """
         In = (InMax or self.InMax) * w + (In0 or self.In0) # if stim >0 give InMax * weight + In0 otherwise give 0
-        
+        """
        
         if self.tail != 0:
             tail_zeros = np.zeros((parameter.N , int(self.tail / simu.dt))).transpose() #permute(1,0)
@@ -1280,7 +1280,7 @@ if __name__=="__main__":
     #sim.printSim()
     # \\\\ Bottom up sensory input
     repeat_input = 3
-    ISI = 0.02#0.05
+    ISI = 0.05#0.05
     stimuli = Stim(param, sim, dur=sim.T, f=[5], tail = ISI, mul = repeat_input)
     In, range_sim, len_sim, w, sigmaIn = stimuli.sensoryInput(param, sim, sigmaIn=2.) #2.
     #stimuli.printStim()
@@ -1302,7 +1302,7 @@ if __name__=="__main__":
     batch_instance_NLLL_tot = Batch_for_NLLL(IN_tot)
     Target_idx_NLLL = batch_instance_NLLL_tot.Target_index
     Input_NLLL =batch_instance_NLLL_tot.Input_reshaped
-    batch_instance_tot.safety_plot(IN_tot,Target)  
+    #batch_instance_tot.safety_plot(IN_tot,Target)  
     plt.show() 
 
 
@@ -1334,7 +1334,7 @@ if __name__=="__main__":
 
 
 
-    num_epoch = 600 #good 1500 ##
+    num_epoch = 1000 #good 1500 ##
 
 
     #Epoch=[800, 1200, 1500, 1800]
@@ -1349,7 +1349,7 @@ if __name__=="__main__":
     dist = 300E-2#[15E-2]    #[25E-2] #[35E-2] #[25E-2]#[15E-2]   n        #[12E-2, 15E-2, 20E-2, 40E-2]#1E-1 initial
     #lr = 1E-3#2E-3#1E-2
     lr = 10E-4
-    LR = [5E-6]#5E-6 400 epochs -75, 6E-6 375 loss -77 #7E-6 ok for 322 epochs, los -91#8E-6 ok until 272 epochs loss = -70, ok until 200 epochs[1E-5]# 11E-6,12E-6,9E-6,8E-6, 
+    LR = [25E-7,2E-6,1E-6]# #2E-6 25E-7 733 epochs -86  #25E-6 700 epochs -79, #5E-6 400 epochs -75, 6E-6 375 loss -77 #7E-6 ok for 322 epochs, loss -91#8E-6 ok until 272 epochs loss = -70, ok until 200 epochs[1E-5]# 11E-6,12E-6,9E-6,8E-6, 
     Offset = [1]#[.5]good with 500epochs [1.2] good with 600epochs  #[1.8]#[1.15,1.3,1.5,1.6,1.8]
     off = 1
     #Sparse_coefs = [115E-3]

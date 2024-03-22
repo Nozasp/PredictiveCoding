@@ -641,10 +641,11 @@ class Stim:
         #f_instant = np.zeros((int(self.ISI / simu.dt) + 1, 1))  # size ISI : 1 /dt : 1000
 
         for fx in self.f: #+2 to not lose dimension ! becareful! 
-            fx_array = np.concatenate((np.ones((int(self.dur / simu.dt), 1)) * fx,
+            fx_array = np.ones((int(self.dur / simu.dt), 1)) * fx 
+            """np.concatenate((np.ones((int(self.dur / simu.dt), 1)) * fx,
                                        # just 1 frequency of 8 . # inter-stim interval is aslong as stim interval
                                        np.zeros((int(self.ISI / simu.dt),
-                                                 1))))  # so I get 1 list with 1000 lists containing 8 and 1000 lists containing 0
+                                                 1))))"""  # so I get 1 list with 1000 lists containing 8 and 1000 lists containing 0
     
         #f_stim = fx_array # np.vstack((f_instant, fx_array))  # stack vertically these arrays # [0] *1000 , [8]*1000, [0]*1000
         self.f_stim = fx_array# f_stim[1:]  # 1400*1
@@ -1043,7 +1044,7 @@ def control_system(Target_idx_np, parm, lagrangian_multipliers, eps, Prediction)
     concatenated_tensor = torch.cat(param_list, dim=0)
     #ic(len(concatenated_tensor))
     be_positive = torch.zeros(1)
-    if torch.any(concatenated_tensor > 0):
+    if torch.any(concatenated_tensor < 0):
         be_positive = torch.sum(F.relu(-concatenated_tensor[concatenated_tensor<0])) #for values in parm if torch.any(values < 0)]#parmdic.values() 
         
     be_p = be_positive * lagrangian_multipliers['be_positive']  
@@ -1082,8 +1083,8 @@ def total_custom_loss(model_t, Prediction, I, Target, derivativeE, lagrangian_mu
     
     ##""" THIS HAS CHANGED"
     #parm = {name: par for name, par in model_t.named_parameters()}
-    #parm = dict(model_t.named_parameters())
-    parm = model_t.state_dict()
+    parm = dict(model_t.named_parameters())
+    #parm = model_t.state_dict()
     
     _norm, _derivative = decoding_loss(Target_idx_np, lagrangian_multipliers,Prediction, Target, derivativeE, offset)#_derivative
     positive_param = control_system(Target_idx_np, parm, lagrangian_multipliers, eps, Prediction)
@@ -1124,7 +1125,7 @@ class run_optimization:
     
     #@jit(target_backend='cuda') 
     def run(self, model, Input, T, modelpath, num_epoch, learning_rate,offset): 
-        model.initiate_state()
+        #model.initiate_state()
         model.train()
         for epoch in range(num_epoch):
             model.initiate_state()
@@ -1133,20 +1134,14 @@ class run_optimization:
             I = torch.zeros(Input.shape) 
             dPdt = torch.zeros_like(Input)  
 
-            count = 0
+            #count = 0
             for i, b in enumerate(T):
-                count +=1
+                #count +=1
                 P[i,:], I[i,:], dPdt[i,:], dridt, ampa, gaba = model(Input[int(i),:])
-                if count == len_sim: #train_IN.shape[1]: #if we end the simulation time and go to the next batch
+                """if count == len_sim: #train_IN.shape[1]: #if we end the simulation time and go to the next batch
                     count = 0
-                    model.initiate_state()
+                    model.initiate_state()"""
 
-            #P2 = logsoft(P)
-            #P2 = make_it_proba(P)
-            #loss = criterion(P2, T.long())  #loss = criterion(P, T.long()) # #criterion(P2, T.long()) # #loss = easyLoss(P2, train_Targets_reshaped) #loss = custom_loss_(P, Target_idx_NLLL, dPdt)
-            #loss_c = custom_loss(T)
-            #loss = loss_c.total_custom_loss(P, T, dPdt)
-            #loss = custom_loss_(model, P, I, T, dPdt) # 
             loss = total_custom_loss(model, P, I, T, dPdt, self.lagrandian_mul, self.N, self.eps, offset)
             loss.backward()
             self.optimizer.step()
@@ -1279,7 +1274,7 @@ if __name__=="__main__":
     sim = Simulation(dt=1e-3,T=.05) 
     #sim.printSim()
     # \\\\ Bottom up sensory input
-    repeat_input = 3
+    repeat_input = 1
     ISI = 0.05#0.05
     stimuli = Stim(param, sim, dur=sim.T, f=[5], tail = ISI, mul = repeat_input)
     In, range_sim, len_sim, w, sigmaIn = stimuli.sensoryInput(param, sim, sigmaIn=2.) #2.
@@ -1333,8 +1328,8 @@ if __name__=="__main__":
 
 
 
-
-    num_epoch = 1000 #good 1500 ##
+ 
+    num_epoch = 2700 #1000 #good 1500 ##
 
 
     #Epoch=[800, 1200, 1500, 1800]
@@ -1349,7 +1344,7 @@ if __name__=="__main__":
     dist = 300E-2#[15E-2]    #[25E-2] #[35E-2] #[25E-2]#[15E-2]   n        #[12E-2, 15E-2, 20E-2, 40E-2]#1E-1 initial
     #lr = 1E-3#2E-3#1E-2
     lr = 10E-4
-    LR = [10E-7]#7E-7ok 1000epochs#2E-6 842 epochs,1E-6]# #2E-6 epoch 842, loss -97, 25E-7 733 epochs -86  #25E-6 700 epochs -79, #5E-6 400 epochs -75, 6E-6 375 loss -77 #7E-6 ok for 322 epochs, loss -91#8E-6 ok until 272 epochs loss = -70, ok until 200 epochs[1E-5]# 11E-6,12E-6,9E-6,8E-6, 
+    LR = [6E-7]#20E-6 until 200 good#10E-7 #7E-7ok 1000epochs#2E-6 842 epochs,1E-6]# #2E-6 epoch 842, loss -97, 25E-7 733 epochs -86  #25E-6 700 epochs -79, #5E-6 400 epochs -75, 6E-6 375 loss -77 #7E-6 ok for 322 epochs, loss -91#8E-6 ok until 272 epochs loss = -70, ok until 200 epochs[1E-5]# 11E-6,12E-6,9E-6,8E-6, 
     Offset = [1]#[.5]good with 500epochs [1.2] good with 600epochs  #[1.8]#[1.15,1.3,1.5,1.6,1.8]
     off = 1
     #Sparse_coefs = [115E-3]
@@ -1363,7 +1358,7 @@ if __name__=="__main__":
         start = timer()
         ic(lr, sparse)
         result.run(model_new, Input_NLLL, Target_idx_NLLL, modelpath= "Optimized_good_lr_" + f"{lr}" + f"{sparse}"  , num_epoch=num_epoch, learning_rate=lr, offset = off)
-        print("without GPU:", (timer()-start)/ 60, " minutes") 
+        print("Training time:", (timer()-start)/ 60, " minutes") 
         optim_list.append(result)
         print(result)
 

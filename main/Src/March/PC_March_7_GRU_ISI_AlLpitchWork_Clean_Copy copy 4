@@ -10,7 +10,6 @@ import torch.optim as optim #optim.sgd
 from torchvision import transforms, utils, datasets
 from torch.utils.data import Dataset, DataLoader, random_split, SubsetRandomSampler, WeightedRandomSampler
 from torch.utils.data import TensorDataset, DataLoader  # for batch and split Xtrain Ytrain dataset
-from torch.nn.utils.rnn import pad_sequence
 import scipy
 import scipy.ndimage as nd
 from scipy.stats import norm
@@ -56,7 +55,6 @@ def HeatMap(rE, rI, J=None, toshow = True):
     rE_df = pd.DataFrame(rE.T)  # to get time vs pop
     rI_df = pd.DataFrame(rI.T)
     rE_df.index = rE_df.index #+ 1
-    print(rE_df.index)
     rI_df.index = rI_df.index #+ 1
     rE_df.index.name, rI_df.index.name = ["Excitatory Population", "Inhibitory Population"]
     rE_df.columns.name, rI_df.columns.name = ["Time ms", "Time ms"]
@@ -324,11 +322,35 @@ def init_random_Tgaussian(N, mu =0., sigma = .025, lower = 0., upper = np.inf): 
 """
  Normalization or transform to probability
 """
+"""def make_it_proba(r_e):
+    eps = torch.FloatTensor([sys.float_info.epsilon]) #torch.FloatTensor
+    #noisy_term = init_random_Tgaussian(r_e.shape[1])
+    #plt.plot(np.arange(r_e.shape[1]), r_e[40,:].detach().numpy())
+    #plt.show()
+    offset = 1# 5
+    #sigma = 1/np.sqrt(r_e.shape[1])= 0.025
+    sigma = 0.1 #0.025
+    noisy_term = offset + torch.tensor(init_random_Tgaussian(r_e.shape[1], mu = 0., sigma = sigma))
+    #noisy_term = torch.max(offset, torch.tensor(init_random_Tgaussian(r_e.shape[1], mu = 0., sigma = sigma), dtype = torch.float32))
+    plt.plot(np.arange(r_e.shape[1]), noisy_term)
+    plt.show()
+    
+    #r_e_max = torch.max(r_e, eps.expand_as(r_e))#
+    #threshold = 5     # torch.FloatTensor([5]).expand_as(r_e[10,:])
+    #sum_r_e = torch.sum(r_e, 1).reshape(r_e.shape[0], 1)
+    #prob_r= 0.5 * (1 + torch.tanh(sum_r_e - threshold))*(r_e_max / sum_r_e)   #r_e_max.sum())
+
+    unormalised_prob = r_e + (noisy_term * eps) 
+    prob_r = unormalised_prob / sum(unormalised_prob, 1) #.reshape(r_e.shape[0], 1) #keepdim = True
+    #plt.plot(np.arange(r_e.shape[1]), prob_r[40,:].detach().numpy())
+    #plt.show()
+    return prob_r #.reshape(r_e.shape[0], r_e.shape[1]) 
+"""
 
 def make_it_proba(r_e, offset = 1):
     eps = torch.FloatTensor([sys.float_info.epsilon]) #torch.FloatTensor
     #offset = 0.5 #eps #1 # 5
-    sigma = 0.02#0.025#works well 0.025 #works0.1 #0.01 #0.025
+    sigma = 0.025#works well 0.025 #works0.1 #0.01 #0.025
     noisy_term = torch.tensor(init_random_Tgaussian(r_e.shape[1], mu = 1, sigma = sigma, lower = 1))#offset +  #, dtype = torch.float32
     unormalised_prob = r_e + (noisy_term)
     prob_r = unormalised_prob / (unormalised_prob).sum(1, keepdims = True)
@@ -409,8 +431,9 @@ def model_with_saved_trained_param(old_model, optimizer, Model, param, sim, dicJ
     if old_model.Jee == new_mymodel.Jee:
         print("it works")
     print("old model Jee:",old_model.Jee,"new model Jee:", new_mymodel.Jee)
+    #print(optimizer.param_groups)
+    #print(optimizer.state)
     return new_mymodel, optimizer
-
 
 def load_weights(newmodel, modelpath): #string
         if '.pt' not in modelpath:
@@ -599,14 +622,14 @@ class Simulation:
 
 #  °°° Initialisation of the variables °°°
 class Stim:
-    def __init__(self, param, simu, f, ISI=0, dur=0.05, tail = 0, mul = 0):#ISI=0.5, dur=0.2): #ISI=1, dur=0.2   # 8 #[10]
+    def __init__(self, param, simu, f, ISI=0, dur=0.05, tail = 0):#ISI=0.5, dur=0.2): #ISI=1, dur=0.2   # 8 #[10]
         self.f = f  # array of frequency stimulus types
         self.ISI = ISI  # inter-stimulus interval
         self.dur = dur  # duration in s of a specific stimulus segment . The time the frequency fi ll be maintained in the f array
-        self.tail = tail
-        self.mul = mul
+        self.tail = 0 #try .05s  and then.4
         self.predDt = 0
         self.pred = 0
+        self.tail = tail
         self.InMax = param.InMax
         self.In0 = param.In0
         self.N = param.N
@@ -614,15 +637,15 @@ class Stim:
         # Instantaneous frequency
         #f_instant = np.zeros((int(self.ISI / simu.dt) + 1, 1))  # size ISI : 1 /dt : 1000
 
-        for fx in self.f: #+2 to not lose dimension ! becareful! 
-            fx_array = np.concatenate((np.ones((int(self.dur / simu.dt), 1)) * fx,
+        for fx in self.f: 
+            fx_array = np.ones((int(self.dur / simu.dt), 1)) * fx 
+            """np.concatenate((np.ones((int(self.dur / simu.dt), 1)) * fx,
                                        # just 1 frequency of 8 . # inter-stim interval is aslong as stim interval
                                        np.zeros((int(self.ISI / simu.dt),
-                                                 1))))  # so I get 1 list with 1000 lists containing 8 and 1000 lists containing 0
+                                                 1)))) """ # so I get 1 list with 1000 lists containing 8 and 1000 lists containing 0
     
-        #f_stim = fx_array # np.vstack((f_instant, fx_array))  # stack vertically these arrays # [0] *1000 , [8]*1000, [0]*1000
-        self.f_stim = fx_array# f_stim[1:]  # 1400*1
-      
+        self.f_stim = fx_array # np.vstack((f_instant, fx_array))  # stack vertically these arrays # [0] *1000 , [8]*1000, [0]*1000
+       
     # bottom up sensory Input # duration 1sec
     def sensoryInput(self, parameter, simu, sigmaIn=None, f_stim=None, InMax=None, In0=None):
         paramf = np.arange(0, self.N)
@@ -635,28 +658,29 @@ class Stim:
         # totalAct = w.sum(axis = 1) #sum over each row
         # norm_w = (w.T / totalAct).T # elementwise division
         
-       
+        #In = (InMax or self.InMax) * w + (In0 or self.In0) # if stim >0 give InMax * weight + In0 otherwise give 0
         In = np.where(f_stim or self.f_stim > 0, (InMax or self.InMax) * w + (In0 or self.In0),
-                0)  # if stim >0 give InMax * weight + In0 otherwise give 0
-        """
-        In = (InMax or self.InMax) * w + (In0 or self.In0) # if stim >0 give InMax * weight + In0 otherwise give 0
-        """
+                0) 
        
         if self.tail != 0:
             tail_zeros = np.zeros((parameter.N , int(self.tail / simu.dt))).transpose() #permute(1,0)
+            #ic(tail_zeros.shape, In.shape)
             In = np.concatenate((In, tail_zeros), axis = 0) #np.hstack((In, tail_zeros))
-            if self.mul != 0:
+            #ic(In.shape)
+            """if self.mul != 0:
                 repeatIN = np.tile(In, (self.mul, 1)) #np.stack([In for _ in range(self.mul)], axis=1)
                 In = np.vstack(repeatIN)
+            """
                 
-        In_short = In
-        range_sim = np.arange(1, In_short.shape[0] + 1)
+        
+        range_sim = np.arange(1, In.shape[0]+1)
         len_sim = len(range_sim)
-        self.In = In_short
+
+        self.In = In
         self.w = w
         self.sigmaIn = sigmaIn
 
-        return In_short, range_sim, len_sim ,w, sigmaIn
+        return In, range_sim, len_sim ,w, sigmaIn
 
     def printStim(self):
         print("frequence of stimulus f:", self.f, "  ISI:", self.ISI,"s","  Size In", self.In.shape, "Size w:",
@@ -672,18 +696,19 @@ class Stim:
 4- Create the DataLoader merging Xtrain_tensor and Ytrain_tensor (Input and Target)
  """
 class Batch:
-    def __init__(self, param, simu,len_sim,tail, mul):
+    def __init__(self, param, simu,len_sim, tail):
      # 1  \\\\\\\\\\\ BIG Bottom up sensory input
         self.N_short = param.N # - 6
         self.IN= torch.zeros(len_sim, self.N_short ,self.N_short)
-        self.get_sensory_input(param,simu, tail, mul)
+        self.tail = tail
+        self.get_sensory_input(param,simu,tail)
         
 
-    def get_sensory_input(self, param, simu, tail, mul):
+    def get_sensory_input(self, param, simu,tail):
         for i in range(0, self.N_short):
-            #index = i+1
-            st = Stim(param,simu, dur=simu.T,f =[i], ISI=0, tail = tail, mul= mul) 
+            st = Stim(param,simu, dur=simu.T,f =[i], ISI=0, tail = tail) 
             In, _,_,_,_ =st.sensoryInput(param, simu, sigmaIn = 2.)
+       
             self.IN[:,:, i] = torch.tensor(In)
             #sti = torch.tensor(In).float()
 
@@ -692,11 +717,11 @@ class Batch:
         #create a random list containing each of our stimuli types
         num_stimuli = self.IN.shape[2]
         rand_idx = np.arange(0, num_stimuli)
-        rng = np.random.default_rng(32)#1245
+        rng = np.random.default_rng(1245)
         rng.shuffle(rand_idx)
 
         # split this random list into test and train index. and filter the IN with those indexes
-        val_split_index = int(np.floor(0.5 * num_stimuli)) #0.7 for training! .3 for test
+        val_split_index = int(np.floor(0.7 * num_stimuli))
         test_idx, train_idx = rand_idx[val_split_index:], rand_idx[:val_split_index]
         
         train_IN = self.IN[:,:, train_idx].permute(2,0,1)
@@ -710,16 +735,10 @@ class Batch:
         num_stimuli = self.IN.shape[2]
         rand_idx = np.arange(0, num_stimuli)
         rng = np.random.default_rng(1245)
-        rng.shuffle(rand_idx)
-
-        # split this random list into test and train index. and filter the IN with those indexes
-        #val_split_index = int(np.floor(0.7 * num_stimuli))
-        #new_idx = rand_idx[val_split_index:], rand_idx[:val_split_index]
-        
+        rng.shuffle(rand_idx) 
         train_IN = self.IN[:,:, rand_idx].permute(2,0,1)
-        #test_IN = self.IN[:,:, test_idx].permute(2,0,1)
-
-        return train_IN #, test_IN
+        
+        return train_IN 
     # 3
     def get_Targets(self, Inputs):
         Targets = torch.zeros_like(Inputs)
@@ -746,12 +765,12 @@ class Batch:
     
     #6
     def safety_plot(self, train_IN, train_Targets):  
+        N = train_IN.shape[2]      
         X_proba = make_it_proba(train_IN[4,:,:])
         Y = train_Targets[4,:,:]
-        N = X_proba.shape[1]      
         t=48
-        plt.plot(torch.arange(1, N+1), X_proba[t,:], label= f"Proba Input at t={t}") #not in proba
-        plt.plot(torch.arange(1, N+1), Y.detach().numpy()[t,:], label = f"target at t={t}") #in proba
+        plt.plot(torch.arange(0, N), X_proba[t,:], label= f"Proba Input at t={t}") #not in proba
+        plt.plot(torch.arange(0, N), Y.detach().numpy()[t,:], label = f"target at t={t}") #in proba
         plt.legend()
 
 class Batch_for_NLLL:
@@ -803,7 +822,7 @@ class Model(nn.Module):
 
         #--- Define other model parameters, layers, or components here if needed
         self.dt = sim.dt #torch.tensor(1e-4) #
-        self.N = In.shape[1]#param.N - 6 #20
+        self.N = param.N #In.shape[1]#param.N - 6 #20
         self.taue = self.taui = torch.tensor(param.taue) #torch.tensor(0.005)
          # ¤ parameter of the phi function Not tweakable parameters
         self.ae = torch.tensor(param.ae)# 18.26)  # 2 #Wong have to check # Modelling and Meg Gain of the E populaiton
@@ -820,7 +839,7 @@ class Model(nn.Module):
         self.sEI = .2
         self.tauAMPA = torch.tensor(0.002)
         self.tauGABA = torch.tensor(0.005)
-       
+
         """with open(file_name, "rb") as file:
             loaded_wee_wii = pickle.load(file)"""
         #self.Inoise = np.random.randn()
@@ -853,21 +872,24 @@ class Model(nn.Module):
 
         self.dicJ = dicJ #kwargs
         
-        self.Jee = torch.tensor(self.dicJ['Jee'], requires_grad = False, dtype=torch.float64)#0.2609) #nn.Parameter(torch.tensor(self.dicJ['Jee'], requires_grad = True, dtype=torch.float64)) #0.2609 nA, wong and wang
+        self.Jee = torch.tensor(.2609, dtype=torch.float64)   
+        self.Jie = torch.tensor(1.5215, dtype=torch.float64)   
+        self.Jei = torch.tensor(.962, dtype=torch.float64)   
+        self.Jii = torch.tensor(-0.024, dtype=torch.float64)   
+        self.Jin = torch.tensor(0.0112, dtype=torch.float64)   
+
+        """self.Jee = torch.tensor(self.dicJ['Jee'], requires_grad = False, dtype=torch.float64)#0.2609) #nn.Parameter(torch.tensor(self.dicJ['Jee'], requires_grad = True, dtype=torch.float64)) #0.2609 nA, wong and wang
         self.Jei = nn.Parameter(torch.tensor(self.dicJ['Jei'], requires_grad = True, dtype=torch.float64))
         self.Jie = nn.Parameter(torch.tensor(self.dicJ['Jie'], requires_grad = True, dtype=torch.float64))
         self.Jii = nn.Parameter(torch.tensor(self.dicJ['Jii'], requires_grad = True, dtype=torch.float64))
         self.Jin = nn.Parameter(torch.tensor(self.dicJ['Jin'], requires_grad = True, dtype=torch.float64))
-
+        """
         hidden_size = self.N  # Number of units in the hidden state
         self.gru = nn.GRU(input_size=self.N, hidden_size=hidden_size, num_layers=1, batch_first=True)
 
-        #self.rnn = nn.RNN(self.N, self.N , 1, batch_first=True) # Batch as the first dimension
-        # x---> (batchsize, sequenceSize, inputSize)
-        
         #--- Initialize model variables here
     def initiate_state(self):
-        self.prev_r_e = torch.zeros((self.N)).unsqueeze(0).unsqueeze(0) # torch.ones(self.N) shows more obvious results
+        self.prev_r_e = torch.zeros((self.N)) # torch.ones(self.N) shows more obvious results
         self.prev_r_i = torch.zeros((self.N))
         self.prev_s_ampa = torch.zeros((self.N))
         self.prev_s_gaba = torch.zeros((self.N))
@@ -876,8 +898,6 @@ class Model(nn.Module):
         self.s_ampa = torch.tensor(0.)
         self.i_tot_e = torch.tensor(0.)
         self.i_tot_i = torch.tensor(0.)
-        self.hidden_state = torch.zeros(1, self.N).unsqueeze(0) # Shape: (num_layers, hidden_size) -> Shape: (num_layers, batch_size, hidden_size)
-
 		
 
     def phi(self, I_tot, a, b, hm): #)))  # this use a lot of memory - exponential part
@@ -912,24 +932,14 @@ class Model(nn.Module):
 
     def forward(self, In):
         #--- Compute values of interest
-        #self.hidden_state = torch.zeros(1, self.N)
-        #ic(self.hidden_state.unsqueeze(0).shape)
-        #ic(self.prev_r_e.unsqueeze(0).unsqueeze(0).shape)
-        #ic(self.hidden_state.shape)
-        #ic(self.prev_r_e.shape)
-        I_gru, new_hidden_state = self.gru(self.prev_r_e, self.hidden_state)
-        #ic(self.prev_r_e.unsqueeze(0).shape)
-        #I_gru, hn = self.rnn(self.prev_r_e.unsqueeze(0), ho)
-
-        # Remove batch dimension from the new hidden state
-        #I_gru, hn = self.rnn(input, self.prev_r_e)
+   
         s_gaba_wie = self.prev_s_gaba @ self.wie
         s_ampa_wei = self.prev_s_ampa @ self.wei
         s_gaba_wii = self.prev_s_gaba @ self.wii
         s_ampa_wee = self.prev_s_ampa @ self.wee
       
         self.i_tot_e = (self.Jee * s_ampa_wee) - (self.Jie * s_gaba_wie) + (self.Jin* (In)) #+ self.I_noise_E
-        self.i_tot_i = (self.Jei * s_ampa_wei) - (self.Jii * s_gaba_wii) + I_gru
+        self.i_tot_i = (self.Jei * s_ampa_wei) - (self.Jii * s_gaba_wii)
 
         phi_arr_e = self.phi(self.i_tot_e, self.ae, self.be, self.hme)
         phi_arr_i = self.phi(self.i_tot_i, self.ai, self.bi, self.hmi)
@@ -937,9 +947,6 @@ class Model(nn.Module):
         self.dr_e_dt = ((-self.prev_r_e + phi_arr_e) / self.taue)
         self.dr_i_dt = ((-self.prev_r_i + phi_arr_i) / self.taui)
 
-        ic(self.dr_e_dt.shape)
-        sys.exit()
-       
         r_e = self.prev_r_e+ self.dr_e_dt * self.dt
         r_i = self.prev_r_i + self.dr_i_dt * self.dt
 
@@ -980,20 +987,7 @@ def decoding_loss(Target_idx_np, lagrangian_multipliers, Prediction, Target, der
     loss_norm = criterion(P2, Target.long())    
 
     loss_derivative = torch.zeros_like(Target)     #loss_derivative.fill_(float('nan'))
-    #len_sim_test = len_sim
-    """
-    count = 0
-    #count += 1
-    start = 0
-    stop = (len_sim)
-    for i, sti_idx in enumerate(Target_idx_np):
-        count += 1
-        if count == stop:
-            loss_derivative[i] = - (F.softplus(derivativeE[start:stop,sti_idx] ).sum() * 4) + F.softplus(derivativeE[start:stop,:sti_idx]).sum() + F.softplus(derivativeE[start:stop,(sti_idx+1):]).sum()
-            #loss_derivative[i2] = - F.softplus(derivativeE[time_idx,sti_idx] ).mean() + F.softplus(derivativeE[time_idx,:sti_idx]).mean() + F.softplus(derivativeE[time_idx,(sti_idx+1):]).mean()
-            start = stop
-            stop += len_sim
-    """
+ 
     loss_derivative_term = loss_derivative.mean()
     l_norm = loss_norm * lagrangian_multipliers['normalization']
     l_der = loss_derivative_term * lagrangian_multipliers['derivative']
@@ -1002,29 +996,31 @@ def decoding_loss(Target_idx_np, lagrangian_multipliers, Prediction, Target, der
 
 def control_system(Target_idx_np, parm, lagrangian_multipliers, eps, Prediction):
         #stable and bounded system
-
+    
     #4/ Constraint ws and Js        
-    #params_K = list(parm.values()) 
     param_list = [tensor.flatten() for tensor in parm.values()]
     concatenated_tensor = torch.cat(param_list, dim=0)
     #ic(len(concatenated_tensor))
     be_positive = torch.zeros(1)
-    if torch.any(concatenated_tensor > 0):
+    if torch.any(concatenated_tensor < 0):
         be_positive = torch.sum(F.relu(-concatenated_tensor[concatenated_tensor<0])) #for values in parm if torch.any(values < 0)]#parmdic.values() 
         
     be_p = be_positive * lagrangian_multipliers['be_positive']  
   
-    #padded_sequences = [torch.tensor(param) for name, param in enumerate(model_t.named_parameters().items())]
-    #ic(padded_sequences)
-    #parm = pad_sequence(padded_sequences, batch_first=True, padding_value=0)
-
+    """be_positive = torch.zeros(1) 
+    neg_param_values = [torch.sum(F.relu(-values[values<0])) for values in parm.values() if torch.any(values < 0)]
+    if neg_param_values:
+        be_positive = torch.sum(torch.stack(neg_param_values))
+        #ic(be_positive)
+    be_p = be_positive * lagrangian_multipliers['be_positive']
+    """
     return be_p 
 
 
 def activity_efficiency(re,ri, lagrangian_multipliers):
     #more selective use of neurons in representing information.
     tau_s = 1#0.001
-    tau_i = 1
+    tau_i = 5
     sparse_coding_wei = lagrangian_multipliers['sparse_coding'] * torch.sum(torch.log1p((re**2 / tau_s)))#log1p = log(1+ (x))#torch.sum(torch.abs(W["wei"])) #)
     sparse_coding_wie = lagrangian_multipliers['sparse_coding'] * torch.sum(torch.log1p((ri**2 / tau_i))) #torch.sum(torch.abs(W["wie"]))#
     sparse_coding_term = (sparse_coding_wei + sparse_coding_wie) 
@@ -1041,14 +1037,15 @@ def architecture_efficiency(parm, lagrangian_multipliers,N):
 #@jit(target_backend='cuda') 
 
 def total_custom_loss(model_t, Prediction, I, Target, derivativeE, lagrangian_multipliers, N, eps, offset): #, model !!!
-    Target = torch.tensor(Target)
-    Target_idx_np = Target.to(torch.int)
+    #noisy_RE = torch.tensor(init_random_Tgaussian(N), dtype = torch.float32)
     
-    ##""" THIS HAS CHANGED"
-    #parm = {name: par for name, par in model_t.named_parameters()}
-    #parm = dict(model_t.named_parameters())
-    parm = model_t.state_dict()
-    
+    Target_idx_np = Target.numpy().astype(int)
+    parm = {name: par for name, par in model_t.named_parameters()}
+    #complicado: parm = model_t.state_dict()
+
+    #ic(parm.keys())
+    #for name, par in model_t.named_parameters() : # enumerate(trained_model.parameters()):
+     #       parm[name] = par 
     _norm, _derivative = decoding_loss(Target_idx_np, lagrangian_multipliers,Prediction, Target, derivativeE, offset)#_derivative
     positive_param = control_system(Target_idx_np, parm, lagrangian_multipliers, eps, Prediction)
     sparse_cod = activity_efficiency(Prediction,I, lagrangian_multipliers)
@@ -1059,13 +1056,19 @@ def total_custom_loss(model_t, Prediction, I, Target, derivativeE, lagrangian_mu
     #ic(Cost)
     return Cost
 
+#@jit(target_backend='cuda') 
 class run_optimization:
-    def __init__(self, model, lagrang_mul, opti_name = "Adam" ,num_epoch =20, learning_rate =0.001): # sparse_coef = 3E-2, dist_diag = 1E-1):
+    def __init__(self, model, opti_name = "Adam" ,num_epoch =20, learning_rate =0.001, sparse_coef = 3E-2, dist_diag = 1E-1):
         self.N = param.N
         self.eps = torch.FloatTensor([sys.float_info.epsilon]) 
     
-        self.lagrandian_mul = lagrang_mul 
-      
+        self.lagrandian_mul = {'normalization': 7000,'derivative': 1E-6, 'hyperactivity':1E-8, 'laziness': 0.01,
+
+                                    'distance_diag': dist_diag, 'sparse_coding':sparse_coef, 'be_positive': 200}
+        #distance_diag = 1E-1
+
+        #self.criterion = torch.nn.NLLLoss()
+        #self.logsoft = nn.LogSoftmax(dim=1)
         self.W = {}
         self.early_stopper = EarlyStopper(patience=15, min_delta=2)#3
 
@@ -1080,6 +1083,7 @@ class run_optimization:
         
         #self.run(criterion, logsoft, model, Input, T, modelpath, num_epoch,learning_rate)
     
+    #@jit(target_backend='cuda') 
     def run(self, model, Input, T, modelpath, num_epoch, learning_rate,offset): 
         model.initiate_state()
         model.train()
@@ -1090,18 +1094,18 @@ class run_optimization:
             I = torch.zeros(Input.shape) 
             dPdt = torch.zeros_like(Input)  
 
-            count = 0
+            #count = 0
             for i, b in enumerate(T):
-                count +=1
+                #count +=1
                 P[i,:], I[i,:], dPdt[i,:], dridt, ampa, gaba = model(Input[int(i),:])
-                if count == len_sim: #train_IN.shape[1]: #if we end the simulation time and go to the next batch
-                    count = 0
-                    model.initiate_state()
+                #if count == len_sim: #train_IN.shape[1]: #if we end the simulation time and go to the next batch
+                    #count = 0
+                    #model.initiate_state()
 
             loss = total_custom_loss(model, P, I, T, dPdt, self.lagrandian_mul, self.N, self.eps, offset)
             loss.backward()
             self.optimizer.step()
-            
+          
             #ic(torch.max(P))#, torch.min(P),torch.mean(P))
             
             if self.early_stopper.early_stop(loss):  
@@ -1112,9 +1116,18 @@ class run_optimization:
             print(f'Epoch [{epoch + 1}/{num_epoch}], Loss: {loss}') # , Learning rate:{learning_rate}')#.item()
             """for par in model.parameters():
                 ic(par.grad)"""
+            if epoch == 3000:
+                J2= {'Jee': model.Jee.numpy(), 'Jei': model.Jei.detach().numpy(), 'Jie': model.Jie.detach().numpy(), 'Jii': model.Jii.detach().numpy(), 'Jin': model.Jin.detach().numpy()}
+                #ic(J2)
+                fig0, (axA, axB)  = HeatMap(P[:50,:].detach().numpy(), I[:50,:].detach().numpy(), J2, toshow = False)
+                fig0.savefig(f'C:/Users/knzga/Documents/02_Computational Neuroscience Project/Image/OutputNetwork/Heatmap/Heatmap_Pred_{learning_rate}_{epoch}__1600epInteruption.png')
+                connectivity_matrix_2x2(model, Learning_Rate =learning_rate , n_epoch =epoch, sparce = 10000, distance_diag = 10000, rand = 10000)    
+                plt.show()
 
 
 
+        self.P = P
+        self.I = I
 
         for name, par in model.named_parameters() : # enumerate(trained_model.parameters()):
             self.W[name] = par #getattr(trained_model, "wee)
@@ -1171,26 +1184,29 @@ class run_optimization:
         with open(file_name, "w") as fp:
             json.dump(self.lagrandian_mul, fp)  # encode dict into JSON
         print(f"lagrandian_multiplier_sp{sparse}_dd{distance_D} into {rand_num_fig}.txt file")
-         # plot     
+        #print(f"Offset for the make it proba is{offset}")
+        
+        # plot     
         r = np.round(np.random.rand(),1)
         g = np.round(np.random.rand(),1)
         b = np.round(np.random.rand(),1)
         color_l = [r,g,b]
         self.color_list = color_l
         #ic(model.Jee.numpy())
-        plt.plot(np.arange(0,50), P[:50,14].detach().numpy(), label = f"pop={6 + 1}, exc")
-        plt.plot(np.arange(0,50), I[:50,14].detach().numpy(), label = f"pop={6 +1}, inh")
-        plt.plot(np.arange(0,50), P[:50,13].detach().numpy(), label = f"pop={5+ 1}, exc")
-        plt.plot(np.arange(0,50), I[:50,13].detach().numpy(), label = f"pop={5 +1}, inh")
+        plt.plot(np.arange(0,50), P[:50,6].detach().numpy(), label = f"pop={6}, exc")
+        plt.plot(np.arange(0,50), I[:50,6].detach().numpy(), label = f"pop={6}, inh")
+        plt.plot(np.arange(0,50), P[:50,7].detach().numpy(), label = f"pop={7}, exc")
+        plt.plot(np.arange(0,50), I[:50,7].detach().numpy(), label = f"pop={7}, inh")
         plt.legend()
         plt.title("Firing rate over time after training, when pitch value = 7")
         plt.show()
         J2= {'Jee': model.Jee.numpy(), 'Jei': model.Jei.detach().numpy(), 'Jie': model.Jie.detach().numpy(), 'Jii': model.Jii.detach().numpy(), 'Jin': model.Jin.detach().numpy()}
         #ic(J2)
-        fig0, (axA, axB)  = HeatMap(P[:51,:].detach().numpy(), I[:50,:].detach().numpy(), J2, toshow = False)
+        fig0, (axA, axB)  = HeatMap(P[:50,:].detach().numpy(), I[:50,:].detach().numpy(), J2, toshow = False)
         fig0.savefig(f'C:/Users/knzga/Documents/02_Computational Neuroscience Project/Image/OutputNetwork/Heatmap/Heatmap_Pred_{learning_rate}_{num_epoch}_sp{sparse}__dd{distance_D}_{rand_num_fig:0>3}.png')
         fig4, (axA, axB)  = HeatMap(P[:,:].detach().numpy(), I[:,:].detach().numpy(), J2, toshow = False)
         fig4.savefig(f'C:/Users/knzga/Documents/02_Computational Neuroscience Project/Image/OutputNetwork/Heatmap/Heatmap_Total_{learning_rate}_{num_epoch}_sp{sparse}__dd{distance_D}_{rand_num_fig:0>3}.png')
+        fig0, (axA, axB)  = HeatMap(P[355:410,:].detach().numpy(), I[355:410,:].detach().numpy(), J2, toshow = False)
 
         fig1 = plt.figure(tight_layout=True)
         gs = gridspec.GridSpec(1,2, figure = fig1)
@@ -1199,7 +1215,7 @@ class run_optimization:
         ax1.set_title(f"Training Loss over {num_epoch} epochs with a learning rate of {learning_rate}")  #, sp:{sparse}, dd:{distance_D}
 
         ax2 = fig1.add_subplot(gs[0,1])
-        ax2.plot(np.arange(P.shape[1]), P[50,:].detach().numpy(), color = color_l, label = f"dd={distance_D}, sp={sparse}, offset={offset}")
+        ax2.plot(np.arange(P.shape[1]), P[45,:].detach().numpy(), color = color_l, label = f"dd={distance_D}, sp={sparse}, offset={offset}")
         ax2.set_title( f'Firing rate prediction after training over {num_epoch} epochs, and lr={learning_rate}') #ax.set_ylabel('YLabel1 %d' % i)#ax.set_xlabel('XLabel1 %d' % i)
 
         fig1.set_figheight(5)
@@ -1226,45 +1242,41 @@ class run_optimization:
 if __name__=="__main__":
     param = Parameter(N = 25)#30 # N=20
     # \\\\ Simulation time: T in s  (2s before)
-    sim = Simulation(dt=1e-3,T=.05) 
+    sim = Simulation(dt=1e-3,T=.050) 
     #sim.printSim()
     # \\\\ Bottom up sensory input
-    repeat_input = 3
-    ISI = 0.05#0.05
-    stimuli = Stim(param, sim, dur=sim.T, f=[5], tail = ISI, mul = repeat_input)
-    In, range_sim, len_sim, w, sigmaIn = stimuli.sensoryInput(param, sim, sigmaIn=2.) #2.
     #stimuli.printStim()
-
-
-    batch_instance = Batch(param=param, simu=sim, len_sim = len_sim, tail = ISI, mul = repeat_input)
-    train_dataloader, train_Targets, train_IN, test_dataloader, test_Targets, test_IN = batch_instance.preprocess_data()
-    batch_instance.safety_plot(train_IN,train_Targets)
-    #batch_instance.IN[:,3:-3,3:-3].shape
-
-    batch_instance_NLLL = Batch_for_NLLL(train_IN)
-    Target_idx_NLLL = batch_instance_NLLL.Target_index
-    Input_NLLL =batch_instance_NLLL.Input_reshaped
     
-    plt.show() 
-    """
-    batch_instance_tot = Batch(param=param, simu=sim, len_sim = len_sim, tail = ISI, mul = repeat_input)
+    ISI = 0.05#0.05
+    stimuli = Stim(param, sim, dur=sim.T, f=[5], tail = ISI) #, mul = repeat_input
+    In, range_sim, len_sim, w, sigmaIn = stimuli.sensoryInput(param, sim, sigmaIn=2.) #2.
+    
+    batch_instance_tot = Batch(param=param, simu=sim, len_sim = len_sim, tail = ISI)
     IN_tot= batch_instance_tot.permuted_pitch() #IN_tot = batch_instance_tot.IN#.permute(2,0,1)
     Target = batch_instance_tot.get_Targets(IN_tot)
 
     batch_instance_NLLL_tot = Batch_for_NLLL(IN_tot)
     Target_idx_NLLL = batch_instance_NLLL_tot.Target_index
     Input_NLLL =batch_instance_NLLL_tot.Input_reshaped
-    batch_instance_tot.safety_plot(IN_tot,Target)  
-    plt.show() 
-    """
+    #batch_instance_tot.safety_plot(IN_tot,Target)  
+    #plt.show() 
+
+       
+    # J1 = {'Jee': 0.2609, 'Jei': 0.004, 'Jie': 0.05, 'Jii': 0.6, 'Jin': 0.00695} #old Jee: 0.072
+    J1 = {'Jee': 0.2609, 'Jei': 0.962, 'Jie': 1.5215, 'Jii': -0.024, 'Jin': 0.0112} #old Jee: 0.072
+    HeatMap(Input_NLLL,Input_NLLL, J = J1)
+    
+    #sys.exit()
+    
+
 
     # +++++++++++++++++++++++++ Initialize the Model ++++++++++++++++++++++++++++
     J1 = {'Jee': 0.2609, 'Jei': 0.004, 'Jie': 0.05, 'Jii': 0.6, 'Jin': 0.00695} #old Jee: 0.072
     J_list = list(J1.keys())
     print(J1['Jee'], J_list)
 
-    """
-    J1 = {'Jee': 0.2609, 'Jei': 1.1132, 'Jie': 1.5471, 'Jii': -0.0542, 'Jin': 0.0089} #old Jee: 0.072
+
+    """J1 = {'Jee': 0.2609, 'Jei': 1.1132, 'Jie': 1.5471, 'Jii': -0.0542, 'Jin': 0.0089} #old Jee: 0.072
 
     model_n = Model(param,sim, J1, Input_NLLL)
     model_n.initiate_state()      
@@ -1282,43 +1294,45 @@ if __name__=="__main__":
     sys.exit()
     """
 
-   
-    num_epoch = 200 #good 1500 ##
+
+
+
+
+    num_epoch = 4500 #1900#1550 #good1500 
     #Epoch=[800, 1200, 1500, 1800]
 
 
-    #Sparse_coefs = [1E-3]#1E-2 good,
-    #sparse = 1E-3 #6E-3#good 5E-3
+    Sparse_coefs = [1E-3]
+    sparse = 6E-3# good5E-3
     optim_list = []
-    distance_diag = [30E-2]#[300E-2]old good
-    dist = 30E-2#300E-2
-    #lr = 10E-4
-    LR = [1E-20]#[2E-4]#1E-4#2E-6 #2E-6 epoch 842, loss -97, 25E-7 733 epochs -86  #25E-6 700 epochs -79, #5E-6 400 epochs -75, 6E-6 375 loss -77 #7E-6 ok for 322 epochs, loss -91#8E-6 ok until 272 epochs loss = -70, ok until 200 epochs[1E-5]# 11E-6,12E-6,9E-6,8E-6, 
-    off = 1
+    distance_diag = [300E-2]
+    dist = 300E-2
+    lr = 6E-4##7E-4 good at least for 1900 epochs, 8E-4 good for at least 1500 epochs
+    Offset = [1]
 
     #for i, num_epoch in enumerate(Epoch):
     #for i, dist in enumerate(distance_diag):
     #for i, sparse in enumerate(Sparse_coefs):
-    #for i, off in enumerate(Offset):
-    for i, lr in enumerate(LR):
-        lagrang_mul = {'normalization': 7000,'derivative': 1E-6, 'hyperactivity':1E-8, 'laziness': 0.01,
-
-                                    'distance_diag': 30E-2, 'sparse_coding':1E-3, 'be_positive': 200}
-       
-        #lagrang_mul = {'normalization': 10,'derivative': 0, 'hyperactivity':0, 'laziness': 0,
-         #                           'distance_diag': .1, 'sparse_coding':.0001, 'be_positive': .6}
-        sparse = 1E-3#5.
+    #for i, lr in enumerate(LR):
+    for i, off in enumerate(Offset):
         model_new = Model(param,sim, J1, Input_NLLL)
-        result = run_optimization(model_new, lagrang_mul ,opti_name = "Adam" ,num_epoch = num_epoch, learning_rate = lr)
+        result = run_optimization(model_new, opti_name = "Adam" ,num_epoch = num_epoch, learning_rate = lr, sparse_coef = sparse, dist_diag= dist)
         start = timer()
         ic(lr, sparse)
         result.run(model_new, Input_NLLL, Target_idx_NLLL, modelpath= "Optimized_good_lr_" + f"{lr}" + f"{sparse}"  , num_epoch=num_epoch, learning_rate=lr, offset = off)
-        print("without GPU:", (timer()-start)/ 60, " minutes") 
+        print("Training time:", (timer()-start)/ 60, " minutes") 
         optim_list.append(result)
         print(result)
 
 
-
+"""  for i, b in enumerate(Target_idx_NLLL):
+            result.P[i,:], r_i[i,:], _2[i,:], _, _, _ = model_n.forward(Input_NLLL[int(i), :])
+        
+        HeatMap(r_e[0:50,:].detach().numpy(), r_i[0:50,:].detach().numpy(), J = J1)
+        
+        print("hello")
+        sys.exit()
+"""
 
 
 

@@ -34,4 +34,23 @@ if neg_param_values:
 be_p = be_positive * 2
 print("without GPU:", (timer()-start2), " seconds") 
 print(be_p)
+
+
+
+
+parmdic = {'ok': torch.tensor((1.,3)), 'okk':torch.tensor((1.,2.,3)), 'okkk':torch.tensor((1.,1.,3)), 'not okkk':torch.tensor((-1.,-3)), 'not okkkk':torch.tensor((-4.,-1.,-3))}
+#parm = model_t.state_dict()
+
+start2 = timer()
+param_list = [torch.tensor(tensor).flatten() for tensor in parmdic.values()]
+concatenated_tensor = torch.cat(param_list, dim=0)
+be_positive = torch.zeros(1)
+if torch.any(concatenated_tensor < 0):
+    be_positive = torch.sum(F.relu(-concatenated_tensor[concatenated_tensor<0])) #for values in parm if torch.any(values < 0)]#parmdic.values() 
+    print(concatenated_tensor[concatenated_tensor<0])
+be_p = be_positive * 2
+
+print("without GPU:", (timer()-start2), " seconds") 
+print(be_p)
+  
        
